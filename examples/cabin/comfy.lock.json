@@ -1,0 +1,49 @@
+{
+  "comfyui_version": "0.3.99-fake",
+  "classes": {
+    "CLIPTextEncode": {
+      "module": "nodes",
+      "schema": "sha256:c391173e6158f2700cb7c8c9"
+    },
+    "CheckpointLoaderSimple": {
+      "module": "nodes",
+      "schema": "sha256:48abe86c1bc9fe331d3afb2e"
+    },
+    "EmptyLatentImage": {
+      "module": "nodes",
+      "schema": "sha256:d947b01bc14997cbfcfc2606"
+    },
+    "Image Film Grain (WAS)": {
+      "module": "custom_nodes.was-node-suite-comfyui",
+      "schema": "sha256:ccbd7116f7a1db54757f8f35"
+    },
+    "KSampler": {
+      "module": "nodes",
+      "schema": "sha256:8860e258d4d77f4e19e14c7e"
+    },
+    "LatentUpscaleBy": {
+      "module": "nodes",
+      "schema": "sha256:a149764f119e4f3dee5003e1"
+    },
+    "LoraLoader": {
+      "module": "nodes",
+      "schema": "sha256:c9b2b137d503b28d184285be"
+    },
+    "SaveImage": {
+      "module": "nodes",
+      "schema": "sha256:3c619248fe9f39bd674b3396"
+    },
+    "VAEDecode": {
+      "module": "nodes",
+      "schema": "sha256:f9b3a7e662ad7bf6e085c398"
+    }
+  },
+  "files": {
+    "CheckpointLoaderSimple.ckpt_name": [
+      "sdxl.safetensors"
+    ],
+    "LoraLoader.lora_name": [
+      "ghibli_wc.safetensors"
+    ]
+  }
+}

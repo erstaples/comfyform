@@ -1,0 +1,98 @@
+{
+  "CheckpointLoaderSimple": {
+    "input": {"required": {"ckpt_name": [["flux1-dev.safetensors", "sdxl.safetensors", "sd15.safetensors"], {"tooltip": "The checkpoint to load."}]}},
+    "input_order": {"required": ["ckpt_name"]},
+    "output": ["MODEL", "CLIP", "VAE"], "output_is_list": [false, false, false], "output_name": ["MODEL", "CLIP", "VAE"],
+    "name": "CheckpointLoaderSimple", "display_name": "Load Checkpoint", "category": "loaders", "output_node": false, "python_module": "nodes"
+  },
+  "LoraLoader": {
+    "input": {"required": {
+      "model": ["MODEL"], "clip": ["CLIP"],
+      "lora_name": [["ghibli_wc.safetensors", "film_grain.safetensors"]],
+      "strength_model": ["FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01}],
+      "strength_clip": ["FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01}]
+    }},
+    "input_order": {"required": ["model", "clip", "lora_name", "strength_model", "strength_clip"]},
+    "output": ["MODEL", "CLIP"], "output_is_list": [false, false], "output_name": ["MODEL", "CLIP"],
+    "name": "LoraLoader", "display_name": "Load LoRA", "category": "loaders", "output_node": false, "python_module": "nodes"
+  },
+  "CLIPTextEncode": {
+    "input": {"required": {"text": ["STRING", {"multiline": true, "dynamicPrompts": true}], "clip": ["CLIP"]}},
+    "input_order": {"required": ["text", "clip"]},
+    "output": ["CONDITIONING"], "output_is_list": [false], "output_name": ["CONDITIONING"],
+    "name": "CLIPTextEncode", "display_name": "CLIP Text Encode (Prompt)", "category": "conditioning", "output_node": false, "python_module": "nodes"
+  },
+  "EmptyLatentImage": {
+    "input": {"required": {
+      "width": ["INT", {"default": 512, "min": 16, "max": 16384, "step": 8}],
+      "height": ["INT", {"default": 512, "min": 16, "max": 16384, "step": 8}],
+      "batch_size": ["INT", {"default": 1, "min": 1, "max": 4096}]
+    }},
+    "input_order": {"required": ["width", "height", "batch_size"]},
+    "output": ["LATENT"], "output_is_list": [false], "output_name": ["LATENT"],
+    "name": "EmptyLatentImage", "display_name": "Empty Latent Image", "category": "latent", "output_node": false, "python_module": "nodes"
+  },
+  "KSampler": {
+    "input": {"required": {
+      "model": ["MODEL"],
+      "seed": ["INT", {"default": 0, "min": 0, "max": 18446744073709551615, "control_after_generate": true}],
+      "steps": ["INT", {"default": 20, "min": 1, "max": 10000}],
+      "cfg": ["FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step": 0.1, "round": 0.01}],
+      "sampler_name": [["euler", "euler_ancestral", "dpmpp_2m", "dpmpp_2m_sde", "uni_pc"]],
+      "scheduler": [["normal", "karras", "exponential", "sgm_uniform", "simple"]],
+      "positive": ["CONDITIONING"], "negative": ["CONDITIONING"], "latent_image": ["LATENT"],
+      "denoise": ["FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}]
+    }},
+    "input_order": {"required": ["model", "seed", "steps", "cfg", "sampler_name", "scheduler", "positive", "negative", "latent_image", "denoise"]},
+    "output": ["LATENT"], "output_is_list": [false], "output_name": ["LATENT"],
+    "name": "KSampler", "display_name": "KSampler", "category": "sampling", "output_node": false, "python_module": "nodes"
+  },
+  "LatentUpscaleBy": {
+    "input": {"required": {
+      "samples": ["LATENT"],
+      "upscale_method": ["COMBO", {"options": ["nearest-exact", "bilinear", "area", "bicubic", "bislerp"]}],
+      "scale_by": ["FLOAT", {"default": 1.5, "min": 0.01, "max": 8.0, "step": 0.01}]
+    }},
+    "input_order": {"required": ["samples", "upscale_method", "scale_by"]},
+    "output": ["LATENT"], "output_is_list": [false], "output_name": ["LATENT"],
+    "name": "LatentUpscaleBy", "display_name": "Upscale Latent By", "category": "latent", "output_node": false, "python_module": "nodes"
+  },
+  "VAEDecode": {
+    "input": {"required": {"samples": ["LATENT"], "vae": ["VAE"]}},
+    "input_order": {"required": ["samples", "vae"]},
+    "output": ["IMAGE"], "output_is_list": [false], "output_name": ["IMAGE"],
+    "name": "VAEDecode", "display_name": "VAE Decode", "category": "latent", "output_node": false, "python_module": "nodes"
+  },
+  "SaveImage": {
+    "input": {"required": {"images": ["IMAGE"], "filename_prefix": ["STRING", {"default": "ComfyUI"}]}, "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"}},
+    "input_order": {"required": ["images", "filename_prefix"], "hidden": ["prompt", "extra_pnginfo"]},
+    "output": [], "output_is_list": [], "output_name": [],
+    "name": "SaveImage", "display_name": "Save Image", "category": "image", "output_node": true, "python_module": "nodes"
+  },
+  "PreviewImage": {
+    "input": {"required": {"images": ["IMAGE"]}, "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"}},
+    "input_order": {"required": ["images"], "hidden": ["prompt", "extra_pnginfo"]},
+    "output": [], "output_is_list": [], "output_name": [],
+    "name": "PreviewImage", "display_name": "Preview Image", "category": "image", "output_node": true, "python_module": "nodes"
+  },
+  "Image Film Grain (WAS)": {
+    "input": {
+      "required": {
+        "image": ["IMAGE"],
+        "density": ["FLOAT", {"default": 1.0, "min": 0.01, "max": 1.0, "step": 0.01}],
+        "intensity": ["FLOAT", {"default": 1.0, "min": 0.01, "max": 1.0, "step": 0.01}],
+        "highlights": ["FLOAT", {"default": 1.0, "min": 0.01, "max": 255.0, "step": 0.01}],
+        "supersample_factor": ["INT", {"default": 4, "min": 1, "max": 8, "step": 1}]
+      },
+      "optional": {"mask": ["MASK"], "monochrome": ["BOOLEAN", {"default": true}]}
+    },
+    "input_order": {"required": ["image", "density", "intensity", "highlights", "supersample_factor"], "optional": ["mask", "monochrome"]},
+    "output": ["IMAGE", "IMAGE"], "output_is_list": [false, false], "output_name": ["IMAGE", "IMAGE"],
+    "name": "Image Film Grain (WAS)", "display_name": "Image Film Grain", "category": "WAS Suite/Image/Filter", "output_node": false, "python_module": "custom_nodes.was-node-suite-comfyui"
+  },
+  "Any Switch (rgthree)": {
+    "input": {"required": {}, "optional": {"any_01": ["*"], "any_02": ["*"]}},
+    "output": ["*"], "output_is_list": [false], "output_name": ["*"],
+    "name": "Any Switch (rgthree)", "display_name": "Any Switch", "category": "rgthree", "output_node": false, "python_module": "custom_nodes.rgthree-comfy"
+  }
+}
