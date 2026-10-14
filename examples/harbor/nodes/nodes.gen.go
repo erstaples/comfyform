@@ -6250,9 +6250,9 @@ func CLIPVisionLoader(ctx *comfy.Context, name string, a CLIPVisionLoaderArgs) C
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
 type CacheNodeArgs struct {
-	LatentSuffix       string                  // default "41606198_cache"
-	ImageSuffix        string                  // default "71413863_cache"
-	ConditioningSuffix string                  // default "41597302_cache"
+	LatentSuffix       string                  // default "43294233_cache"
+	ImageSuffix        string                  // default "61930138_cache"
+	ConditioningSuffix string                  // default "98970725_cache"
 	OutputPath         string                  // optional, default "/data/custom_nodes/was-node-suite-comfyui/cache"
 	Latent             graph.Ref[LATENT]       // optional, LATENT
 	Image              graph.Ref[IMAGE]        // optional, IMAGE
@@ -6271,9 +6271,9 @@ type CacheNodeOut struct {
 // CacheNode adds a "Cache Node" node named name.
 func CacheNode(ctx *comfy.Context, name string, a CacheNodeArgs) CacheNodeOut {
 	in := graph.Inputs{}
-	comfy.SetValue(in, "latent_suffix", a.LatentSuffix, "41606198_cache", true, true)
-	comfy.SetValue(in, "image_suffix", a.ImageSuffix, "71413863_cache", true, true)
-	comfy.SetValue(in, "conditioning_suffix", a.ConditioningSuffix, "41597302_cache", true, true)
+	comfy.SetValue(in, "latent_suffix", a.LatentSuffix, "43294233_cache", true, true)
+	comfy.SetValue(in, "image_suffix", a.ImageSuffix, "61930138_cache", true, true)
+	comfy.SetValue(in, "conditioning_suffix", a.ConditioningSuffix, "98970725_cache", true, true)
 	comfy.SetValue(in, "output_path", a.OutputPath, "/data/custom_nodes/was-node-suite-comfyui/cache", true, false)
 	if a.Latent.IsSet() {
 		comfy.SetLink(ctx, in, name, "latent", a.Latent, false)
@@ -6622,59 +6622,7 @@ func ChangeLatentBatchSizeInspire(ctx *comfy.Context, name string, a ChangeLaten
 	return ChangeLatentBatchSizeInspireOut{Node: id, Latent: graph.MakeRef[LATENT](id, 0)}
 }
 
-// CheckpointLoaderArgs is "Checkpoint Loader" (WAS Suite/Loaders/Advanced).
-// Zero values mean the schema default; set Raw to force a literal zero or to
-// wire a link into a widget input.
-type CheckpointLoaderArgs struct {
-	ConfigName string
-	CkptName   string // one of 1 files
-	Raw        graph.Inputs
-}
-
-// CheckpointLoaderOut holds the outputs of "Checkpoint Loader".
-type CheckpointLoaderOut struct {
-	Node       string
-	Model      graph.Ref[MODEL]
-	Clip       graph.Ref[CLIP]
-	VAE        graph.Ref[VAE]
-	NameString graph.Ref[STRING]
-}
-
-// CheckpointLoader adds a "Checkpoint Loader" node named name.
-func CheckpointLoader(ctx *comfy.Context, name string, a CheckpointLoaderArgs) CheckpointLoaderOut {
-	in := graph.Inputs{}
-	comfy.SetValue(in, "config_name", a.ConfigName, "", false, true)
-	comfy.SetValue(in, "ckpt_name", a.CkptName, "", false, true)
-	id := ctx.Node(name, "Checkpoint Loader", in, a.Raw)
-	return CheckpointLoaderOut{Node: id, Model: graph.MakeRef[MODEL](id, 0), Clip: graph.MakeRef[CLIP](id, 1), VAE: graph.MakeRef[VAE](id, 2), NameString: graph.MakeRef[STRING](id, 3)}
-}
-
-// CheckpointLoaderSimpleArgs is "Checkpoint Loader (Simple)" (WAS Suite/Loaders).
-// Zero values mean the schema default; set Raw to force a literal zero or to
-// wire a link into a widget input.
-type CheckpointLoaderSimpleArgs struct {
-	CkptName string // one of 1 files
-	Raw      graph.Inputs
-}
-
-// CheckpointLoaderSimpleOut holds the outputs of "Checkpoint Loader (Simple)".
-type CheckpointLoaderSimpleOut struct {
-	Node       string
-	Model      graph.Ref[MODEL]
-	Clip       graph.Ref[CLIP]
-	VAE        graph.Ref[VAE]
-	NameString graph.Ref[STRING]
-}
-
-// CheckpointLoaderSimple adds a "Checkpoint Loader (Simple)" node named name.
-func CheckpointLoaderSimple(ctx *comfy.Context, name string, a CheckpointLoaderSimpleArgs) CheckpointLoaderSimpleOut {
-	in := graph.Inputs{}
-	comfy.SetValue(in, "ckpt_name", a.CkptName, "", false, true)
-	id := ctx.Node(name, "Checkpoint Loader (Simple)", in, a.Raw)
-	return CheckpointLoaderSimpleOut{Node: id, Model: graph.MakeRef[MODEL](id, 0), Clip: graph.MakeRef[CLIP](id, 1), VAE: graph.MakeRef[VAE](id, 2), NameString: graph.MakeRef[STRING](id, 3)}
-}
-
-// CheckpointLoader2Args is "Load Checkpoint With Config (DEPRECATED)" (model/loaders).
+// CheckpointLoader2Args is "Checkpoint Loader" (WAS Suite/Loaders/Advanced).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
 type CheckpointLoader2Args struct {
@@ -6683,21 +6631,73 @@ type CheckpointLoader2Args struct {
 	Raw        graph.Inputs
 }
 
-// CheckpointLoader2Out holds the outputs of "CheckpointLoader".
+// CheckpointLoader2Out holds the outputs of "Checkpoint Loader".
 type CheckpointLoader2Out struct {
+	Node       string
+	Model      graph.Ref[MODEL]
+	Clip       graph.Ref[CLIP]
+	VAE        graph.Ref[VAE]
+	NameString graph.Ref[STRING]
+}
+
+// CheckpointLoader2 adds a "Checkpoint Loader" node named name.
+func CheckpointLoader2(ctx *comfy.Context, name string, a CheckpointLoader2Args) CheckpointLoader2Out {
+	in := graph.Inputs{}
+	comfy.SetValue(in, "config_name", a.ConfigName, "", false, true)
+	comfy.SetValue(in, "ckpt_name", a.CkptName, "", false, true)
+	id := ctx.Node(name, "Checkpoint Loader", in, a.Raw)
+	return CheckpointLoader2Out{Node: id, Model: graph.MakeRef[MODEL](id, 0), Clip: graph.MakeRef[CLIP](id, 1), VAE: graph.MakeRef[VAE](id, 2), NameString: graph.MakeRef[STRING](id, 3)}
+}
+
+// CheckpointLoaderSimple2Args is "Checkpoint Loader (Simple)" (WAS Suite/Loaders).
+// Zero values mean the schema default; set Raw to force a literal zero or to
+// wire a link into a widget input.
+type CheckpointLoaderSimple2Args struct {
+	CkptName string // one of 1 files
+	Raw      graph.Inputs
+}
+
+// CheckpointLoaderSimple2Out holds the outputs of "Checkpoint Loader (Simple)".
+type CheckpointLoaderSimple2Out struct {
+	Node       string
+	Model      graph.Ref[MODEL]
+	Clip       graph.Ref[CLIP]
+	VAE        graph.Ref[VAE]
+	NameString graph.Ref[STRING]
+}
+
+// CheckpointLoaderSimple2 adds a "Checkpoint Loader (Simple)" node named name.
+func CheckpointLoaderSimple2(ctx *comfy.Context, name string, a CheckpointLoaderSimple2Args) CheckpointLoaderSimple2Out {
+	in := graph.Inputs{}
+	comfy.SetValue(in, "ckpt_name", a.CkptName, "", false, true)
+	id := ctx.Node(name, "Checkpoint Loader (Simple)", in, a.Raw)
+	return CheckpointLoaderSimple2Out{Node: id, Model: graph.MakeRef[MODEL](id, 0), Clip: graph.MakeRef[CLIP](id, 1), VAE: graph.MakeRef[VAE](id, 2), NameString: graph.MakeRef[STRING](id, 3)}
+}
+
+// CheckpointLoaderArgs is "Load Checkpoint With Config (DEPRECATED)" (model/loaders).
+// Zero values mean the schema default; set Raw to force a literal zero or to
+// wire a link into a widget input.
+type CheckpointLoaderArgs struct {
+	ConfigName string
+	CkptName   string // one of 1 files
+	Raw        graph.Inputs
+}
+
+// CheckpointLoaderOut holds the outputs of "CheckpointLoader".
+type CheckpointLoaderOut struct {
 	Node  string
 	Model graph.Ref[MODEL]
 	Clip  graph.Ref[CLIP]
 	VAE   graph.Ref[VAE]
 }
 
-// CheckpointLoader2 adds a "CheckpointLoader" node named name.
-func CheckpointLoader2(ctx *comfy.Context, name string, a CheckpointLoader2Args) CheckpointLoader2Out {
+// CheckpointLoader adds a "CheckpointLoader" node named name.
+func CheckpointLoader(ctx *comfy.Context, name string, a CheckpointLoaderArgs) CheckpointLoaderOut {
 	in := graph.Inputs{}
 	comfy.SetValue(in, "config_name", a.ConfigName, "", false, true)
 	comfy.SetValue(in, "ckpt_name", a.CkptName, "", false, true)
 	id := ctx.Node(name, "CheckpointLoader", in, a.Raw)
-	return CheckpointLoader2Out{Node: id, Model: graph.MakeRef[MODEL](id, 0), Clip: graph.MakeRef[CLIP](id, 1), VAE: graph.MakeRef[VAE](id, 2)}
+	return CheckpointLoaderOut{Node: id, Model: graph.MakeRef[MODEL](id, 0), Clip: graph.MakeRef[CLIP](id, 1), VAE: graph.MakeRef[VAE](id, 2)}
 }
 
 // CheckpointLoaderKJArgs is "CheckpointLoaderKJ" (KJNodes/model_loaders).
@@ -6734,28 +6734,28 @@ func CheckpointLoaderKJ(ctx *comfy.Context, name string, a CheckpointLoaderKJArg
 	return CheckpointLoaderKJOut{Node: id, Model: graph.MakeRef[MODEL](id, 0), Clip: graph.MakeRef[CLIP](id, 1), VAE: graph.MakeRef[VAE](id, 2)}
 }
 
-// CheckpointLoaderSimple2Args is "Load Checkpoint" (model/loaders).
+// CheckpointLoaderSimpleArgs is "Load Checkpoint" (model/loaders).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type CheckpointLoaderSimple2Args struct {
+type CheckpointLoaderSimpleArgs struct {
 	CkptName string // one of 1 files
 	Raw      graph.Inputs
 }
 
-// CheckpointLoaderSimple2Out holds the outputs of "CheckpointLoaderSimple".
-type CheckpointLoaderSimple2Out struct {
+// CheckpointLoaderSimpleOut holds the outputs of "CheckpointLoaderSimple".
+type CheckpointLoaderSimpleOut struct {
 	Node  string
 	Model graph.Ref[MODEL]
 	Clip  graph.Ref[CLIP]
 	VAE   graph.Ref[VAE]
 }
 
-// CheckpointLoaderSimple2 adds a "CheckpointLoaderSimple" node named name.
-func CheckpointLoaderSimple2(ctx *comfy.Context, name string, a CheckpointLoaderSimple2Args) CheckpointLoaderSimple2Out {
+// CheckpointLoaderSimple adds a "CheckpointLoaderSimple" node named name.
+func CheckpointLoaderSimple(ctx *comfy.Context, name string, a CheckpointLoaderSimpleArgs) CheckpointLoaderSimpleOut {
 	in := graph.Inputs{}
 	comfy.SetValue(in, "ckpt_name", a.CkptName, "", false, true)
 	id := ctx.Node(name, "CheckpointLoaderSimple", in, a.Raw)
-	return CheckpointLoaderSimple2Out{Node: id, Model: graph.MakeRef[MODEL](id, 0), Clip: graph.MakeRef[CLIP](id, 1), VAE: graph.MakeRef[VAE](id, 2)}
+	return CheckpointLoaderSimpleOut{Node: id, Model: graph.MakeRef[MODEL](id, 0), Clip: graph.MakeRef[CLIP](id, 1), VAE: graph.MakeRef[VAE](id, 2)}
 }
 
 // CheckpointLoaderSimpleSharedInspireArgs is "Shared Checkpoint Loader (Inspire)" (InspirePack/Backend).
@@ -22856,10 +22856,10 @@ func ImageAspectRatio(ctx *comfy.Context, name string, a ImageAspectRatioArgs) I
 	return ImageAspectRatioOut{Node: id, AspectNumber: graph.MakeRef[NUMBER](id, 0), AspectFloat: graph.MakeRef[FLOAT](id, 1), IsLandscapeBool: graph.MakeRef[NUMBER](id, 2), AspectRatioCommon: graph.MakeRef[STRING](id, 3), AspectType: graph.MakeRef[STRING](id, 4)}
 }
 
-// ImageBatchArgs is "Image Batch" (WAS Suite/Image).
+// ImageBatch2Args is "Image Batch" (WAS Suite/Image).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type ImageBatchArgs struct {
+type ImageBatch2Args struct {
 	ImagesA graph.Ref[IMAGE] // optional, IMAGE
 	ImagesB graph.Ref[IMAGE] // optional, IMAGE
 	ImagesC graph.Ref[IMAGE] // optional, IMAGE
@@ -22867,14 +22867,14 @@ type ImageBatchArgs struct {
 	Raw     graph.Inputs
 }
 
-// ImageBatchOut holds the outputs of "Image Batch".
-type ImageBatchOut struct {
+// ImageBatch2Out holds the outputs of "Image Batch".
+type ImageBatch2Out struct {
 	Node  string
 	Image graph.Ref[IMAGE]
 }
 
-// ImageBatch adds a "Image Batch" node named name.
-func ImageBatch(ctx *comfy.Context, name string, a ImageBatchArgs) ImageBatchOut {
+// ImageBatch2 adds a "Image Batch" node named name.
+func ImageBatch2(ctx *comfy.Context, name string, a ImageBatch2Args) ImageBatch2Out {
 	in := graph.Inputs{}
 	if a.ImagesA.IsSet() {
 		comfy.SetLink(ctx, in, name, "images_a", a.ImagesA, false)
@@ -22889,7 +22889,7 @@ func ImageBatch(ctx *comfy.Context, name string, a ImageBatchArgs) ImageBatchOut
 		comfy.SetLink(ctx, in, name, "images_d", a.ImagesD, false)
 	}
 	id := ctx.Node(name, "Image Batch", in, a.Raw)
-	return ImageBatchOut{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
+	return ImageBatch2Out{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
 }
 
 // ImageBlankArgs is "Image Blank" (WAS Suite/Image).
@@ -22922,24 +22922,24 @@ func ImageBlank(ctx *comfy.Context, name string, a ImageBlankArgs) ImageBlankOut
 	return ImageBlankOut{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
 }
 
-// ImageBlendArgs is "Image Blend" (WAS Suite/Image).
+// ImageBlend2Args is "Image Blend" (WAS Suite/Image).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type ImageBlendArgs struct {
+type ImageBlend2Args struct {
 	ImageA          graph.Ref[IMAGE] // IMAGE
 	ImageB          graph.Ref[IMAGE] // IMAGE
 	BlendPercentage float64          // default 0.5, range 0..1
 	Raw             graph.Inputs
 }
 
-// ImageBlendOut holds the outputs of "Image Blend".
-type ImageBlendOut struct {
+// ImageBlend2Out holds the outputs of "Image Blend".
+type ImageBlend2Out struct {
 	Node  string
 	Image graph.Ref[IMAGE]
 }
 
-// ImageBlend adds a "Image Blend" node named name.
-func ImageBlend(ctx *comfy.Context, name string, a ImageBlendArgs) ImageBlendOut {
+// ImageBlend2 adds a "Image Blend" node named name.
+func ImageBlend2(ctx *comfy.Context, name string, a ImageBlend2Args) ImageBlend2Out {
 	in := graph.Inputs{}
 	if a.ImageA.IsSet() {
 		comfy.SetLink(ctx, in, name, "image_a", a.ImageA, false)
@@ -22953,7 +22953,7 @@ func ImageBlend(ctx *comfy.Context, name string, a ImageBlendArgs) ImageBlendOut
 	}
 	comfy.SetValue(in, "blend_percentage", a.BlendPercentage, float64(0.5), true, true)
 	id := ctx.Node(name, "Image Blend", in, a.Raw)
-	return ImageBlendOut{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
+	return ImageBlend2Out{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
 }
 
 // ImageBlendByMaskArgs is "Image Blend by Mask" (WAS Suite/Image).
@@ -23522,23 +23522,23 @@ func ImageFilterAdjustments(ctx *comfy.Context, name string, a ImageFilterAdjust
 	return ImageFilterAdjustmentsOut{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
 }
 
-// ImageFlipArgs is "Image Flip" (WAS Suite/Image/Transform).
+// ImageFlip2Args is "Image Flip" (WAS Suite/Image/Transform).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type ImageFlipArgs struct {
+type ImageFlip2Args struct {
 	Images graph.Ref[IMAGE] // IMAGE
 	Mode   string           // default "horizontal", horizontal|vertical
 	Raw    graph.Inputs
 }
 
-// ImageFlipOut holds the outputs of "Image Flip".
-type ImageFlipOut struct {
+// ImageFlip2Out holds the outputs of "Image Flip".
+type ImageFlip2Out struct {
 	Node   string
 	Images graph.Ref[IMAGE]
 }
 
-// ImageFlip adds a "Image Flip" node named name.
-func ImageFlip(ctx *comfy.Context, name string, a ImageFlipArgs) ImageFlipOut {
+// ImageFlip2 adds a "Image Flip" node named name.
+func ImageFlip2(ctx *comfy.Context, name string, a ImageFlip2Args) ImageFlip2Out {
 	in := graph.Inputs{}
 	if a.Images.IsSet() {
 		comfy.SetLink(ctx, in, name, "images", a.Images, false)
@@ -23547,7 +23547,7 @@ func ImageFlip(ctx *comfy.Context, name string, a ImageFlipArgs) ImageFlipOut {
 	}
 	comfy.SetValue(in, "mode", a.Mode, "horizontal", true, true)
 	id := ctx.Node(name, "Image Flip", in, a.Raw)
-	return ImageFlipOut{Node: id, Images: graph.MakeRef[IMAGE](id, 0)}
+	return ImageFlip2Out{Node: id, Images: graph.MakeRef[IMAGE](id, 0)}
 }
 
 // ImageGenerateGradientArgs is "Image Generate Gradient" (WAS Suite/Image/Generate).
@@ -24471,10 +24471,10 @@ func ImageResizeRgthree(ctx *comfy.Context, name string, a ImageResizeRgthreeArg
 	return ImageResizeRgthreeOut{Node: id, Image: graph.MakeRef[IMAGE](id, 0), Width: graph.MakeRef[INT](id, 1), Height: graph.MakeRef[INT](id, 2)}
 }
 
-// ImageRotateArgs is "Image Rotate" (WAS Suite/Image/Transform).
+// ImageRotate2Args is "Image Rotate" (WAS Suite/Image/Transform).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type ImageRotateArgs struct {
+type ImageRotate2Args struct {
 	Images   graph.Ref[IMAGE] // IMAGE
 	Mode     string           // default "transpose", transpose|internal
 	Rotation int64            // default 0, range 0..360
@@ -24482,14 +24482,14 @@ type ImageRotateArgs struct {
 	Raw      graph.Inputs
 }
 
-// ImageRotateOut holds the outputs of "Image Rotate".
-type ImageRotateOut struct {
+// ImageRotate2Out holds the outputs of "Image Rotate".
+type ImageRotate2Out struct {
 	Node   string
 	Images graph.Ref[IMAGE]
 }
 
-// ImageRotate adds a "Image Rotate" node named name.
-func ImageRotate(ctx *comfy.Context, name string, a ImageRotateArgs) ImageRotateOut {
+// ImageRotate2 adds a "Image Rotate" node named name.
+func ImageRotate2(ctx *comfy.Context, name string, a ImageRotate2Args) ImageRotate2Out {
 	in := graph.Inputs{}
 	if a.Images.IsSet() {
 		comfy.SetLink(ctx, in, name, "images", a.Images, false)
@@ -24500,7 +24500,7 @@ func ImageRotate(ctx *comfy.Context, name string, a ImageRotateArgs) ImageRotate
 	comfy.SetValue(in, "rotation", a.Rotation, int64(0), true, true)
 	comfy.SetValue(in, "sampler", a.Sampler, "nearest", true, true)
 	id := ctx.Node(name, "Image Rotate", in, a.Raw)
-	return ImageRotateOut{Node: id, Images: graph.MakeRef[IMAGE](id, 0)}
+	return ImageRotate2Out{Node: id, Images: graph.MakeRef[IMAGE](id, 0)}
 }
 
 // ImageRotateHueArgs is "Image Rotate Hue" (WAS Suite/Image/Adjustment).
@@ -24881,10 +24881,10 @@ func ImageSizeToNumber(ctx *comfy.Context, name string, a ImageSizeToNumberArgs)
 	return ImageSizeToNumberOut{Node: id, WidthNum: graph.MakeRef[NUMBER](id, 0), HeightNum: graph.MakeRef[NUMBER](id, 1), WidthFloat: graph.MakeRef[FLOAT](id, 2), HeightFloat: graph.MakeRef[FLOAT](id, 3), WidthInt: graph.MakeRef[INT](id, 4), HeightInt: graph.MakeRef[INT](id, 5)}
 }
 
-// ImageStitchArgs is "Image Stitch" (WAS Suite/Image/Transform).
+// ImageStitch2Args is "Image Stitch" (WAS Suite/Image/Transform).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type ImageStitchArgs struct {
+type ImageStitch2Args struct {
 	ImageA     graph.Ref[IMAGE] // IMAGE
 	ImageB     graph.Ref[IMAGE] // IMAGE
 	Stitch     string           // default "top", top|left|bottom|right
@@ -24892,14 +24892,14 @@ type ImageStitchArgs struct {
 	Raw        graph.Inputs
 }
 
-// ImageStitchOut holds the outputs of "Image Stitch".
-type ImageStitchOut struct {
+// ImageStitch2Out holds the outputs of "Image Stitch".
+type ImageStitch2Out struct {
 	Node  string
 	Image graph.Ref[IMAGE]
 }
 
-// ImageStitch adds a "Image Stitch" node named name.
-func ImageStitch(ctx *comfy.Context, name string, a ImageStitchArgs) ImageStitchOut {
+// ImageStitch2 adds a "Image Stitch" node named name.
+func ImageStitch2(ctx *comfy.Context, name string, a ImageStitch2Args) ImageStitch2Out {
 	in := graph.Inputs{}
 	if a.ImageA.IsSet() {
 		comfy.SetLink(ctx, in, name, "image_a", a.ImageA, false)
@@ -24914,7 +24914,7 @@ func ImageStitch(ctx *comfy.Context, name string, a ImageStitchArgs) ImageStitch
 	comfy.SetValue(in, "stitch", a.Stitch, "top", true, true)
 	comfy.SetValue(in, "feathering", a.Feathering, int64(50), true, true)
 	id := ctx.Node(name, "Image Stitch", in, a.Raw)
-	return ImageStitchOut{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
+	return ImageStitch2Out{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
 }
 
 // ImageStyleFilterArgs is "Image Style Filter" (WAS Suite/Image/Filter).
@@ -25398,23 +25398,23 @@ func ImageAutoSelector(ctx *comfy.Context, name string, a ImageAutoSelectorArgs)
 	return ImageAutoSelectorOut{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
 }
 
-// ImageBatch2Args is "Batch Images (DEPRECATED)" (image/batch).
+// ImageBatchArgs is "Batch Images (DEPRECATED)" (image/batch).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type ImageBatch2Args struct {
+type ImageBatchArgs struct {
 	Image1 graph.Ref[IMAGE] // IMAGE
 	Image2 graph.Ref[IMAGE] // IMAGE
 	Raw    graph.Inputs
 }
 
-// ImageBatch2Out holds the outputs of "ImageBatch".
-type ImageBatch2Out struct {
+// ImageBatchOut holds the outputs of "ImageBatch".
+type ImageBatchOut struct {
 	Node  string
 	Image graph.Ref[IMAGE]
 }
 
-// ImageBatch2 adds a "ImageBatch" node named name.
-func ImageBatch2(ctx *comfy.Context, name string, a ImageBatch2Args) ImageBatch2Out {
+// ImageBatch adds a "ImageBatch" node named name.
+func ImageBatch(ctx *comfy.Context, name string, a ImageBatchArgs) ImageBatchOut {
 	in := graph.Inputs{}
 	if a.Image1.IsSet() {
 		comfy.SetLink(ctx, in, name, "image1", a.Image1, false)
@@ -25427,7 +25427,7 @@ func ImageBatch2(ctx *comfy.Context, name string, a ImageBatch2Args) ImageBatch2
 		comfy.SetLink(ctx, in, name, "image2", nil, true)
 	}
 	id := ctx.Node(name, "ImageBatch", in, a.Raw)
-	return ImageBatch2Out{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
+	return ImageBatchOut{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
 }
 
 // ImageBatchExtendWithOverlapArgs is "Image Batch Extend With Overlap" (KJNodes/image).
@@ -25794,10 +25794,10 @@ func ImageBatchToList(ctx *comfy.Context, name string, a ImageBatchToListArgs) I
 	return ImageBatchToListOut{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
 }
 
-// ImageBlend2Args is "Blend Images" (image/filters).
+// ImageBlendArgs is "Blend Images" (image/filters).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type ImageBlend2Args struct {
+type ImageBlendArgs struct {
 	Image1      graph.Ref[IMAGE] // IMAGE
 	Image2      graph.Ref[IMAGE] // IMAGE
 	BlendFactor float64          // default 0.5, range 0..1
@@ -25805,14 +25805,14 @@ type ImageBlend2Args struct {
 	Raw         graph.Inputs
 }
 
-// ImageBlend2Out holds the outputs of "ImageBlend".
-type ImageBlend2Out struct {
+// ImageBlendOut holds the outputs of "ImageBlend".
+type ImageBlendOut struct {
 	Node  string
 	Image graph.Ref[IMAGE]
 }
 
-// ImageBlend2 adds a "ImageBlend" node named name.
-func ImageBlend2(ctx *comfy.Context, name string, a ImageBlend2Args) ImageBlend2Out {
+// ImageBlend adds a "ImageBlend" node named name.
+func ImageBlend(ctx *comfy.Context, name string, a ImageBlendArgs) ImageBlendOut {
 	in := graph.Inputs{}
 	if a.Image1.IsSet() {
 		comfy.SetLink(ctx, in, name, "image1", a.Image1, false)
@@ -25827,7 +25827,7 @@ func ImageBlend2(ctx *comfy.Context, name string, a ImageBlend2Args) ImageBlend2
 	comfy.SetValue(in, "blend_factor", a.BlendFactor, float64(0.5), true, true)
 	comfy.SetValue(in, "blend_mode", a.BlendMode, "normal", true, true)
 	id := ctx.Node(name, "ImageBlend", in, a.Raw)
-	return ImageBlend2Out{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
+	return ImageBlendOut{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
 }
 
 // ImageBlurArgs is "Blur Image" (image/filters).
@@ -27037,23 +27037,23 @@ func ImageExpandBatch(ctx *comfy.Context, name string, a ImageExpandBatchArgs) I
 	return ImageExpandBatchOut{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
 }
 
-// ImageFlip2Args is "Flip Image" (image/transform).
+// ImageFlipArgs is "Flip Image" (image/transform).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type ImageFlip2Args struct {
+type ImageFlipArgs struct {
 	Image      graph.Ref[IMAGE] // IMAGE
 	FlipMethod string           // default "x-axis: vertically", x-axis: vertically|y-axis: horizontally
 	Raw        graph.Inputs
 }
 
-// ImageFlip2Out holds the outputs of "ImageFlip".
-type ImageFlip2Out struct {
+// ImageFlipOut holds the outputs of "ImageFlip".
+type ImageFlipOut struct {
 	Node  string
 	Image graph.Ref[IMAGE]
 }
 
-// ImageFlip2 adds a "ImageFlip" node named name.
-func ImageFlip2(ctx *comfy.Context, name string, a ImageFlip2Args) ImageFlip2Out {
+// ImageFlip adds a "ImageFlip" node named name.
+func ImageFlip(ctx *comfy.Context, name string, a ImageFlipArgs) ImageFlipOut {
 	in := graph.Inputs{}
 	if a.Image.IsSet() {
 		comfy.SetLink(ctx, in, name, "image", a.Image, false)
@@ -27062,7 +27062,7 @@ func ImageFlip2(ctx *comfy.Context, name string, a ImageFlip2Args) ImageFlip2Out
 	}
 	comfy.SetValue(in, "flip_method", a.FlipMethod, "x-axis: vertically", true, true)
 	id := ctx.Node(name, "ImageFlip", in, a.Raw)
-	return ImageFlip2Out{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
+	return ImageFlipOut{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
 }
 
 // ImageFlip3Args is "🔧 Image Flip" (essentials_mb/image manipulation).
@@ -28252,7 +28252,7 @@ func ImageRandomTransform(ctx *comfy.Context, name string, a ImageRandomTransfor
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
 type ImageReceiverArgs struct {
-	Image          string // one of 17 files
+	Image          string // one of 21 files
 	LinkId         int64  // default 0, range 0..9223372036854776000
 	SaveToWorkflow *bool  // default false
 	ImageData      string
@@ -28598,23 +28598,23 @@ func ImageResizeWithBBoxFaceParsing(ctx *comfy.Context, name string, a ImageResi
 	return ImageResizeWithBBoxFaceParsingOut{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
 }
 
-// ImageRotate2Args is "Rotate Image" (image/transform).
+// ImageRotateArgs is "Rotate Image" (image/transform).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type ImageRotate2Args struct {
+type ImageRotateArgs struct {
 	Image    graph.Ref[IMAGE] // IMAGE
 	Rotation string           // default "none", none|90 degrees|180 degrees|270 degrees
 	Raw      graph.Inputs
 }
 
-// ImageRotate2Out holds the outputs of "ImageRotate".
-type ImageRotate2Out struct {
+// ImageRotateOut holds the outputs of "ImageRotate".
+type ImageRotateOut struct {
 	Node  string
 	Image graph.Ref[IMAGE]
 }
 
-// ImageRotate2 adds a "ImageRotate" node named name.
-func ImageRotate2(ctx *comfy.Context, name string, a ImageRotate2Args) ImageRotate2Out {
+// ImageRotate adds a "ImageRotate" node named name.
+func ImageRotate(ctx *comfy.Context, name string, a ImageRotateArgs) ImageRotateOut {
 	in := graph.Inputs{}
 	if a.Image.IsSet() {
 		comfy.SetLink(ctx, in, name, "image", a.Image, false)
@@ -28623,7 +28623,7 @@ func ImageRotate2(ctx *comfy.Context, name string, a ImageRotate2Args) ImageRota
 	}
 	comfy.SetValue(in, "rotation", a.Rotation, "none", true, true)
 	id := ctx.Node(name, "ImageRotate", in, a.Raw)
-	return ImageRotate2Out{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
+	return ImageRotateOut{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
 }
 
 // ImageScaleArgs is "Upscale Image" (image/upscaling).
@@ -28981,10 +28981,10 @@ func ImageSmartSharpen(ctx *comfy.Context, name string, a ImageSmartSharpenArgs)
 	return ImageSmartSharpenOut{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
 }
 
-// ImageStitch2Args is "Stitch Images" (image/transform).
+// ImageStitchArgs is "Stitch Images" (image/transform).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type ImageStitch2Args struct {
+type ImageStitchArgs struct {
 	Image1         graph.Ref[IMAGE] // IMAGE
 	Direction      string           // default "right", right|down|left|up
 	MatchImageSize *bool            // default true
@@ -28994,14 +28994,14 @@ type ImageStitch2Args struct {
 	Raw            graph.Inputs
 }
 
-// ImageStitch2Out holds the outputs of "ImageStitch".
-type ImageStitch2Out struct {
+// ImageStitchOut holds the outputs of "ImageStitch".
+type ImageStitchOut struct {
 	Node  string
 	Image graph.Ref[IMAGE]
 }
 
-// ImageStitch2 adds a "ImageStitch" node named name.
-func ImageStitch2(ctx *comfy.Context, name string, a ImageStitch2Args) ImageStitch2Out {
+// ImageStitch adds a "ImageStitch" node named name.
+func ImageStitch(ctx *comfy.Context, name string, a ImageStitchArgs) ImageStitchOut {
 	in := graph.Inputs{}
 	if a.Image1.IsSet() {
 		comfy.SetLink(ctx, in, name, "image1", a.Image1, false)
@@ -29016,7 +29016,7 @@ func ImageStitch2(ctx *comfy.Context, name string, a ImageStitch2Args) ImageStit
 		comfy.SetLink(ctx, in, name, "image2", a.Image2, false)
 	}
 	id := ctx.Node(name, "ImageStitch", in, a.Raw)
-	return ImageStitch2Out{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
+	return ImageStitchOut{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
 }
 
 // ImageTensorListArgs is "Image Tensor List" (KJNodes/image).
@@ -36836,10 +36836,10 @@ func LaplaceScheduler(ctx *comfy.Context, name string, a LaplaceSchedulerArgs) L
 	return LaplaceSchedulerOut{Node: id, Sigmas: graph.MakeRef[SIGMAS](id, 0)}
 }
 
-// LatentBatchArgs is "Latent Batch" (WAS Suite/Latent).
+// LatentBatch2Args is "Latent Batch" (WAS Suite/Latent).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type LatentBatchArgs struct {
+type LatentBatch2Args struct {
 	LatentA graph.Ref[LATENT] // optional, LATENT
 	LatentB graph.Ref[LATENT] // optional, LATENT
 	LatentC graph.Ref[LATENT] // optional, LATENT
@@ -36847,14 +36847,14 @@ type LatentBatchArgs struct {
 	Raw     graph.Inputs
 }
 
-// LatentBatchOut holds the outputs of "Latent Batch".
-type LatentBatchOut struct {
+// LatentBatch2Out holds the outputs of "Latent Batch".
+type LatentBatch2Out struct {
 	Node   string
 	Latent graph.Ref[LATENT]
 }
 
-// LatentBatch adds a "Latent Batch" node named name.
-func LatentBatch(ctx *comfy.Context, name string, a LatentBatchArgs) LatentBatchOut {
+// LatentBatch2 adds a "Latent Batch" node named name.
+func LatentBatch2(ctx *comfy.Context, name string, a LatentBatch2Args) LatentBatch2Out {
 	in := graph.Inputs{}
 	if a.LatentA.IsSet() {
 		comfy.SetLink(ctx, in, name, "latent_a", a.LatentA, false)
@@ -36869,7 +36869,7 @@ func LatentBatch(ctx *comfy.Context, name string, a LatentBatchArgs) LatentBatch
 		comfy.SetLink(ctx, in, name, "latent_d", a.LatentD, false)
 	}
 	id := ctx.Node(name, "Latent Batch", in, a.Raw)
-	return LatentBatchOut{Node: id, Latent: graph.MakeRef[LATENT](id, 0)}
+	return LatentBatch2Out{Node: id, Latent: graph.MakeRef[LATENT](id, 0)}
 }
 
 // LatentInputSwitchArgs is "Latent Input Switch" (WAS Suite/Logic).
@@ -37093,23 +37093,23 @@ func LatentApplyOperationCFG(ctx *comfy.Context, name string, a LatentApplyOpera
 	return LatentApplyOperationCFGOut{Node: id, Model: graph.MakeRef[MODEL](id, 0)}
 }
 
-// LatentBatch2Args is "Batch Latents (DEPRECATED)" (model/latent/batch).
+// LatentBatchArgs is "Batch Latents (DEPRECATED)" (model/latent/batch).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type LatentBatch2Args struct {
+type LatentBatchArgs struct {
 	Samples1 graph.Ref[LATENT] // LATENT
 	Samples2 graph.Ref[LATENT] // LATENT
 	Raw      graph.Inputs
 }
 
-// LatentBatch2Out holds the outputs of "LatentBatch".
-type LatentBatch2Out struct {
+// LatentBatchOut holds the outputs of "LatentBatch".
+type LatentBatchOut struct {
 	Node   string
 	Latent graph.Ref[LATENT]
 }
 
-// LatentBatch2 adds a "LatentBatch" node named name.
-func LatentBatch2(ctx *comfy.Context, name string, a LatentBatch2Args) LatentBatch2Out {
+// LatentBatch adds a "LatentBatch" node named name.
+func LatentBatch(ctx *comfy.Context, name string, a LatentBatchArgs) LatentBatchOut {
 	in := graph.Inputs{}
 	if a.Samples1.IsSet() {
 		comfy.SetLink(ctx, in, name, "samples1", a.Samples1, false)
@@ -37122,7 +37122,7 @@ func LatentBatch2(ctx *comfy.Context, name string, a LatentBatch2Args) LatentBat
 		comfy.SetLink(ctx, in, name, "samples2", nil, true)
 	}
 	id := ctx.Node(name, "LatentBatch", in, a.Raw)
-	return LatentBatch2Out{Node: id, Latent: graph.MakeRef[LATENT](id, 0)}
+	return LatentBatchOut{Node: id, Latent: graph.MakeRef[LATENT](id, 0)}
 }
 
 // LatentBatchSeedBehaviorArgs is "LatentBatchSeedBehavior" (model/latent/advanced).
@@ -44889,7 +44889,7 @@ func LoadImageBatch(ctx *comfy.Context, name string, a LoadImageBatchArgs) LoadI
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
 type LoadImageWithFileNameArgs struct {
-	Image string // one of 16 files
+	Image string // one of 20 files
 	Raw   graph.Inputs
 }
 
@@ -45055,7 +45055,7 @@ func Load3DAdvanced(ctx *comfy.Context, name string, a Load3DAdvancedArgs) Load3
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
 type LoadAndResizeImageArgs struct {
-	Image           string // one of 17 files
+	Image           string // one of 21 files
 	Resize          *bool  // default false
 	Width           int64  // default 512, range 0..16384
 	Height          int64  // default 512, range 0..16384
@@ -45214,7 +45214,7 @@ func LoadDiffusionModelSharedInspire(ctx *comfy.Context, name string, a LoadDiff
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
 type LoadImageArgs struct {
-	Image string // one of 16 files
+	Image string // one of 20 files
 	Raw   graph.Inputs
 }
 
@@ -45237,7 +45237,7 @@ func LoadImage(ctx *comfy.Context, name string, a LoadImageArgs) LoadImageOut {
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
 type LoadImageInspireArgs struct {
-	Image     string // one of 18 files
+	Image     string // one of 22 files
 	ImageData string
 	Raw       graph.Inputs
 }
@@ -45364,7 +45364,7 @@ func LoadImageListFromDirInspire(ctx *comfy.Context, name string, a LoadImageLis
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
 type LoadImageMaskArgs struct {
-	Image   string // one of 16 files
+	Image   string // one of 20 files
 	Channel string // default "alpha", alpha|red|green|blue
 	Raw     graph.Inputs
 }
@@ -45388,7 +45388,7 @@ func LoadImageMask(ctx *comfy.Context, name string, a LoadImageMaskArgs) LoadIma
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
 type LoadImageMaskWithSwitchArgs struct {
-	Image   string // one of 17 files
+	Image   string // one of 21 files
 	Channel string // default "red", red|green|blue|alpha
 	Enabled *bool  // optional, default true
 	Raw     graph.Inputs
@@ -45490,7 +45490,7 @@ func LoadImageTextDataSetFromFolder(ctx *comfy.Context, name string, a LoadImage
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
 type LoadImageWithFilenameArgs struct {
-	Image string // one of 16 files
+	Image string // one of 20 files
 	Raw   graph.Inputs
 }
 
@@ -45514,7 +45514,7 @@ func LoadImageWithFilename(ctx *comfy.Context, name string, a LoadImageWithFilen
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
 type LoadImageWithSwitchArgs struct {
-	Image   string // one of 17 files
+	Image   string // one of 21 files
 	Enabled *bool  // optional, default true
 	Raw     graph.Inputs
 }
@@ -46248,10 +46248,10 @@ func LoraInputSwitch(ctx *comfy.Context, name string, a LoraInputSwitchArgs) Lor
 	return LoraInputSwitchOut{Node: id, Model: graph.MakeRef[MODEL](id, 0), Clip: graph.MakeRef[CLIP](id, 1)}
 }
 
-// LoraLoaderArgs is "Lora Loader" (WAS Suite/Loaders).
+// LoraLoader2Args is "Lora Loader" (WAS Suite/Loaders).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type LoraLoaderArgs struct {
+type LoraLoader2Args struct {
 	Model         graph.Ref[MODEL] // MODEL
 	Clip          graph.Ref[CLIP]  // CLIP
 	LoraName      string           // one of 74 files
@@ -46260,16 +46260,16 @@ type LoraLoaderArgs struct {
 	Raw           graph.Inputs
 }
 
-// LoraLoaderOut holds the outputs of "Lora Loader".
-type LoraLoaderOut struct {
+// LoraLoader2Out holds the outputs of "Lora Loader".
+type LoraLoader2Out struct {
 	Node       string
 	Model      graph.Ref[MODEL]
 	Clip       graph.Ref[CLIP]
 	NameString graph.Ref[STRING]
 }
 
-// LoraLoader adds a "Lora Loader" node named name.
-func LoraLoader(ctx *comfy.Context, name string, a LoraLoaderArgs) LoraLoaderOut {
+// LoraLoader2 adds a "Lora Loader" node named name.
+func LoraLoader2(ctx *comfy.Context, name string, a LoraLoader2Args) LoraLoader2Out {
 	in := graph.Inputs{}
 	if a.Model.IsSet() {
 		comfy.SetLink(ctx, in, name, "model", a.Model, false)
@@ -46285,7 +46285,7 @@ func LoraLoader(ctx *comfy.Context, name string, a LoraLoaderArgs) LoraLoaderOut
 	comfy.SetValue(in, "strength_model", a.StrengthModel, float64(1), true, true)
 	comfy.SetValue(in, "strength_clip", a.StrengthClip, float64(1), true, true)
 	id := ctx.Node(name, "Lora Loader", in, a.Raw)
-	return LoraLoaderOut{Node: id, Model: graph.MakeRef[MODEL](id, 0), Clip: graph.MakeRef[CLIP](id, 1), NameString: graph.MakeRef[STRING](id, 2)}
+	return LoraLoader2Out{Node: id, Model: graph.MakeRef[MODEL](id, 0), Clip: graph.MakeRef[CLIP](id, 1), NameString: graph.MakeRef[STRING](id, 2)}
 }
 
 // LoraLoaderStackRgthreeArgs is "Lora Loader Stack (rgthree)" (rgthree).
@@ -46413,10 +46413,10 @@ func LoraExtractKJ(ctx *comfy.Context, name string, a LoraExtractKJArgs) LoraExt
 	return LoraExtractKJOut{Node: id}
 }
 
-// LoraLoader2Args is "Load LoRA (Model and CLIP)" (model/loaders).
+// LoraLoaderArgs is "Load LoRA (Model and CLIP)" (model/loaders).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type LoraLoader2Args struct {
+type LoraLoaderArgs struct {
 	Model         graph.Ref[MODEL] // MODEL
 	Clip          graph.Ref[CLIP]  // CLIP
 	LoraName      string           // one of 73 files
@@ -46425,15 +46425,15 @@ type LoraLoader2Args struct {
 	Raw           graph.Inputs
 }
 
-// LoraLoader2Out holds the outputs of "LoraLoader".
-type LoraLoader2Out struct {
+// LoraLoaderOut holds the outputs of "LoraLoader".
+type LoraLoaderOut struct {
 	Node  string
 	Model graph.Ref[MODEL]
 	Clip  graph.Ref[CLIP]
 }
 
-// LoraLoader2 adds a "LoraLoader" node named name.
-func LoraLoader2(ctx *comfy.Context, name string, a LoraLoader2Args) LoraLoader2Out {
+// LoraLoader adds a "LoraLoader" node named name.
+func LoraLoader(ctx *comfy.Context, name string, a LoraLoaderArgs) LoraLoaderOut {
 	in := graph.Inputs{}
 	if a.Model.IsSet() {
 		comfy.SetLink(ctx, in, name, "model", a.Model, false)
@@ -46449,7 +46449,7 @@ func LoraLoader2(ctx *comfy.Context, name string, a LoraLoader2Args) LoraLoader2
 	comfy.SetValue(in, "strength_model", a.StrengthModel, float64(1), true, true)
 	comfy.SetValue(in, "strength_clip", a.StrengthClip, float64(1), true, true)
 	id := ctx.Node(name, "LoraLoader", in, a.Raw)
-	return LoraLoader2Out{Node: id, Model: graph.MakeRef[MODEL](id, 0), Clip: graph.MakeRef[CLIP](id, 1)}
+	return LoraLoaderOut{Node: id, Model: graph.MakeRef[MODEL](id, 0), Clip: graph.MakeRef[CLIP](id, 1)}
 }
 
 // LoraLoaderBlockWeightInspireArgs is "LoRA Loader (Block Weight)" (InspirePack/LoraBlockWeight).
@@ -48379,10 +48379,10 @@ func MaskPasteRegion(ctx *comfy.Context, name string, a MaskPasteRegionArgs) Mas
 	return MaskPasteRegionOut{Node: id, ResultMask: graph.MakeRef[MASK](id, 0), CropMask: graph.MakeRef[MASK](id, 1)}
 }
 
-// MaskRectAreaArgs is "Mask Rect Area" (WAS Suite/Image/Masking).
+// MaskRectArea2Args is "Mask Rect Area" (WAS Suite/Image/Masking).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type MaskRectAreaArgs struct {
+type MaskRectArea2Args struct {
 	X          int64 // default 0, range 0..100
 	Y          int64 // default 0, range 0..100
 	Width      int64 // default 50, range 0..100
@@ -48391,14 +48391,14 @@ type MaskRectAreaArgs struct {
 	Raw        graph.Inputs
 }
 
-// MaskRectAreaOut holds the outputs of "Mask Rect Area".
-type MaskRectAreaOut struct {
+// MaskRectArea2Out holds the outputs of "Mask Rect Area".
+type MaskRectArea2Out struct {
 	Node  string
 	Masks graph.Ref[MASK]
 }
 
-// MaskRectArea adds a "Mask Rect Area" node named name.
-func MaskRectArea(ctx *comfy.Context, name string, a MaskRectAreaArgs) MaskRectAreaOut {
+// MaskRectArea2 adds a "Mask Rect Area" node named name.
+func MaskRectArea2(ctx *comfy.Context, name string, a MaskRectArea2Args) MaskRectArea2Out {
 	in := graph.Inputs{}
 	comfy.SetValue(in, "x", a.X, int64(0), true, true)
 	comfy.SetValue(in, "y", a.Y, int64(0), true, true)
@@ -48406,13 +48406,13 @@ func MaskRectArea(ctx *comfy.Context, name string, a MaskRectAreaArgs) MaskRectA
 	comfy.SetValue(in, "height", a.Height, int64(50), true, true)
 	comfy.SetValue(in, "blur_radius", a.BlurRadius, int64(0), true, true)
 	id := ctx.Node(name, "Mask Rect Area", in, a.Raw)
-	return MaskRectAreaOut{Node: id, Masks: graph.MakeRef[MASK](id, 0)}
+	return MaskRectArea2Out{Node: id, Masks: graph.MakeRef[MASK](id, 0)}
 }
 
-// MaskRectAreaAdvancedArgs is "Mask Rect Area (Advanced)" (WAS Suite/Image/Masking).
+// MaskRectAreaAdvanced2Args is "Mask Rect Area (Advanced)" (WAS Suite/Image/Masking).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type MaskRectAreaAdvancedArgs struct {
+type MaskRectAreaAdvanced2Args struct {
 	X           int64 // default 0, range 0..4096
 	Y           int64 // default 0, range 0..4096
 	Width       int64 // default 256, range 0..4096
@@ -48423,14 +48423,14 @@ type MaskRectAreaAdvancedArgs struct {
 	Raw         graph.Inputs
 }
 
-// MaskRectAreaAdvancedOut holds the outputs of "Mask Rect Area (Advanced)".
-type MaskRectAreaAdvancedOut struct {
+// MaskRectAreaAdvanced2Out holds the outputs of "Mask Rect Area (Advanced)".
+type MaskRectAreaAdvanced2Out struct {
 	Node  string
 	Masks graph.Ref[MASK]
 }
 
-// MaskRectAreaAdvanced adds a "Mask Rect Area (Advanced)" node named name.
-func MaskRectAreaAdvanced(ctx *comfy.Context, name string, a MaskRectAreaAdvancedArgs) MaskRectAreaAdvancedOut {
+// MaskRectAreaAdvanced2 adds a "Mask Rect Area (Advanced)" node named name.
+func MaskRectAreaAdvanced2(ctx *comfy.Context, name string, a MaskRectAreaAdvanced2Args) MaskRectAreaAdvanced2Out {
 	in := graph.Inputs{}
 	comfy.SetValue(in, "x", a.X, int64(0), true, true)
 	comfy.SetValue(in, "y", a.Y, int64(0), true, true)
@@ -48440,7 +48440,7 @@ func MaskRectAreaAdvanced(ctx *comfy.Context, name string, a MaskRectAreaAdvance
 	comfy.SetValue(in, "image_height", a.ImageHeight, int64(512), true, true)
 	comfy.SetValue(in, "blur_radius", a.BlurRadius, int64(0), true, true)
 	id := ctx.Node(name, "Mask Rect Area (Advanced)", in, a.Raw)
-	return MaskRectAreaAdvancedOut{Node: id, Masks: graph.MakeRef[MASK](id, 0)}
+	return MaskRectAreaAdvanced2Out{Node: id, Masks: graph.MakeRef[MASK](id, 0)}
 }
 
 // MaskSmoothRegionArgs is "Mask Smooth Region" (WAS Suite/Image/Masking).
@@ -49542,10 +49542,10 @@ func MaskPreview2(ctx *comfy.Context, name string, a MaskPreview2Args) MaskPrevi
 	return MaskPreview2Out{Node: id, Images: graph.MakeRef[IMAGE](id, 0)}
 }
 
-// MaskRectArea2Args is "Mask Rect Area" (ImpactPack/Operation).
+// MaskRectAreaArgs is "Mask Rect Area" (ImpactPack/Operation).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type MaskRectArea2Args struct {
+type MaskRectAreaArgs struct {
 	X          int64 // default 0, range 0..100
 	Y          int64 // default 0, range 0..100
 	Width      int64 // default 50, range 0..100
@@ -49554,14 +49554,14 @@ type MaskRectArea2Args struct {
 	Raw        graph.Inputs
 }
 
-// MaskRectArea2Out holds the outputs of "MaskRectArea".
-type MaskRectArea2Out struct {
+// MaskRectAreaOut holds the outputs of "MaskRectArea".
+type MaskRectAreaOut struct {
 	Node string
 	Mask graph.Ref[MASK]
 }
 
-// MaskRectArea2 adds a "MaskRectArea" node named name.
-func MaskRectArea2(ctx *comfy.Context, name string, a MaskRectArea2Args) MaskRectArea2Out {
+// MaskRectArea adds a "MaskRectArea" node named name.
+func MaskRectArea(ctx *comfy.Context, name string, a MaskRectAreaArgs) MaskRectAreaOut {
 	in := graph.Inputs{}
 	comfy.SetValue(in, "x", a.X, int64(0), true, true)
 	comfy.SetValue(in, "y", a.Y, int64(0), true, true)
@@ -49569,13 +49569,13 @@ func MaskRectArea2(ctx *comfy.Context, name string, a MaskRectArea2Args) MaskRec
 	comfy.SetValue(in, "height", a.Height, int64(50), true, true)
 	comfy.SetValue(in, "blur_radius", a.BlurRadius, int64(0), true, true)
 	id := ctx.Node(name, "MaskRectArea", in, a.Raw)
-	return MaskRectArea2Out{Node: id, Mask: graph.MakeRef[MASK](id, 0)}
+	return MaskRectAreaOut{Node: id, Mask: graph.MakeRef[MASK](id, 0)}
 }
 
-// MaskRectAreaAdvanced2Args is "Mask Rect Area (Advanced)" (ImpactPack/Operation).
+// MaskRectAreaAdvancedArgs is "Mask Rect Area (Advanced)" (ImpactPack/Operation).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type MaskRectAreaAdvanced2Args struct {
+type MaskRectAreaAdvancedArgs struct {
 	X           int64 // default 0, range 0..inf
 	Y           int64 // default 0, range 0..inf
 	Width       int64 // default 256, range 0..inf
@@ -49586,14 +49586,14 @@ type MaskRectAreaAdvanced2Args struct {
 	Raw         graph.Inputs
 }
 
-// MaskRectAreaAdvanced2Out holds the outputs of "MaskRectAreaAdvanced".
-type MaskRectAreaAdvanced2Out struct {
+// MaskRectAreaAdvancedOut holds the outputs of "MaskRectAreaAdvanced".
+type MaskRectAreaAdvancedOut struct {
 	Node string
 	Mask graph.Ref[MASK]
 }
 
-// MaskRectAreaAdvanced2 adds a "MaskRectAreaAdvanced" node named name.
-func MaskRectAreaAdvanced2(ctx *comfy.Context, name string, a MaskRectAreaAdvanced2Args) MaskRectAreaAdvanced2Out {
+// MaskRectAreaAdvanced adds a "MaskRectAreaAdvanced" node named name.
+func MaskRectAreaAdvanced(ctx *comfy.Context, name string, a MaskRectAreaAdvancedArgs) MaskRectAreaAdvancedOut {
 	in := graph.Inputs{}
 	comfy.SetValue(in, "x", a.X, int64(0), true, true)
 	comfy.SetValue(in, "y", a.Y, int64(0), true, true)
@@ -49603,7 +49603,7 @@ func MaskRectAreaAdvanced2(ctx *comfy.Context, name string, a MaskRectAreaAdvanc
 	comfy.SetValue(in, "image_height", a.ImageHeight, int64(320), true, true)
 	comfy.SetValue(in, "blur_radius", a.BlurRadius, int64(0), true, true)
 	id := ctx.Node(name, "MaskRectAreaAdvanced", in, a.Raw)
-	return MaskRectAreaAdvanced2Out{Node: id, Mask: graph.MakeRef[MASK](id, 0)}
+	return MaskRectAreaAdvancedOut{Node: id, Mask: graph.MakeRef[MASK](id, 0)}
 }
 
 // MaskSmoothArgs is "🔧 Mask Smooth" (essentials_mb/mask).
@@ -58476,7 +58476,7 @@ func PromptBuilderInspire(ctx *comfy.Context, name string, a PromptBuilderInspir
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
 type PromptExtractorInspireArgs struct {
-	Image      string // one of 17 files
+	Image      string // one of 21 files
 	PositiveId string
 	NegativeId string
 	Info       string
@@ -59096,7 +59096,7 @@ func QwenImageTextToImageApi(ctx *comfy.Context, name string, a QwenImageTextToI
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
 type QwenVLLoadMediaArgs struct {
-	Media      string // one of 895 files
+	Media      string // one of 906 files
 	FrameIndex int64  // default 0, range -1..10000
 	Raw        graph.Inputs
 }
@@ -71307,7 +71307,7 @@ type SwarmInputImageArgs struct {
 	OrderPriority float64          // default 0, range -1024..1024
 	IsAdvanced    *bool            // default false
 	RawId         string           // default ""
-	Image         string           // one of 16 files
+	Image         string           // one of 20 files
 	Group         graph.Ref[GROUP] // optional, GROUP
 	Raw           graph.Inputs
 }
@@ -78573,27 +78573,27 @@ func UploadToRemoteBrowser(ctx *comfy.Context, name string, a UploadToRemoteBrow
 	return UploadToRemoteBrowserOut{Node: id}
 }
 
-// UpscaleModelLoaderArgs is "Upscale Model Loader" (WAS Suite/Loaders).
+// UpscaleModelLoader2Args is "Upscale Model Loader" (WAS Suite/Loaders).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type UpscaleModelLoaderArgs struct {
+type UpscaleModelLoader2Args struct {
 	ModelName string // one of 3 files
 	Raw       graph.Inputs
 }
 
-// UpscaleModelLoaderOut holds the outputs of "Upscale Model Loader".
-type UpscaleModelLoaderOut struct {
+// UpscaleModelLoader2Out holds the outputs of "Upscale Model Loader".
+type UpscaleModelLoader2Out struct {
 	Node          string
 	UpscaleModel  graph.Ref[UPSCALE_MODEL]
 	ModelNameText graph.Ref[STRING]
 }
 
-// UpscaleModelLoader adds a "Upscale Model Loader" node named name.
-func UpscaleModelLoader(ctx *comfy.Context, name string, a UpscaleModelLoaderArgs) UpscaleModelLoaderOut {
+// UpscaleModelLoader2 adds a "Upscale Model Loader" node named name.
+func UpscaleModelLoader2(ctx *comfy.Context, name string, a UpscaleModelLoader2Args) UpscaleModelLoader2Out {
 	in := graph.Inputs{}
 	comfy.SetValue(in, "model_name", a.ModelName, "", false, true)
 	id := ctx.Node(name, "Upscale Model Loader", in, a.Raw)
-	return UpscaleModelLoaderOut{Node: id, UpscaleModel: graph.MakeRef[UPSCALE_MODEL](id, 0), ModelNameText: graph.MakeRef[STRING](id, 1)}
+	return UpscaleModelLoader2Out{Node: id, UpscaleModel: graph.MakeRef[UPSCALE_MODEL](id, 0), ModelNameText: graph.MakeRef[STRING](id, 1)}
 }
 
 // UpscaleModelSwitchArgs is "Upscale Model Switch" (WAS Suite/Logic).
@@ -78662,26 +78662,26 @@ func UpscaleImageWithModelIfNeed(ctx *comfy.Context, name string, a UpscaleImage
 	return UpscaleImageWithModelIfNeedOut{Node: id, Image: graph.MakeRef[IMAGE](id, 0)}
 }
 
-// UpscaleModelLoader2Args is "Load Upscale Model" (model/loaders).
+// UpscaleModelLoaderArgs is "Load Upscale Model" (model/loaders).
 // Zero values mean the schema default; set Raw to force a literal zero or to
 // wire a link into a widget input.
-type UpscaleModelLoader2Args struct {
+type UpscaleModelLoaderArgs struct {
 	ModelName string // one of 3 files
 	Raw       graph.Inputs
 }
 
-// UpscaleModelLoader2Out holds the outputs of "UpscaleModelLoader".
-type UpscaleModelLoader2Out struct {
+// UpscaleModelLoaderOut holds the outputs of "UpscaleModelLoader".
+type UpscaleModelLoaderOut struct {
 	Node         string
 	UpscaleModel graph.Ref[UPSCALE_MODEL]
 }
 
-// UpscaleModelLoader2 adds a "UpscaleModelLoader" node named name.
-func UpscaleModelLoader2(ctx *comfy.Context, name string, a UpscaleModelLoader2Args) UpscaleModelLoader2Out {
+// UpscaleModelLoader adds a "UpscaleModelLoader" node named name.
+func UpscaleModelLoader(ctx *comfy.Context, name string, a UpscaleModelLoaderArgs) UpscaleModelLoaderOut {
 	in := graph.Inputs{}
 	comfy.SetValue(in, "model_name", a.ModelName, "", false, true)
 	id := ctx.Node(name, "UpscaleModelLoader", in, a.Raw)
-	return UpscaleModelLoader2Out{Node: id, UpscaleModel: graph.MakeRef[UPSCALE_MODEL](id, 0)}
+	return UpscaleModelLoaderOut{Node: id, UpscaleModel: graph.MakeRef[UPSCALE_MODEL](id, 0)}
 }
 
 // VAEInputSwitchArgs is "VAE Input Switch" (WAS Suite/Logic).

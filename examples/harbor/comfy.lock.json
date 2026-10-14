@@ -5,9 +5,9 @@
       "module": "nodes",
       "schema": "sha256:c391173e6158f2700cb7c8c9"
     },
-    "Checkpoint Loader (Simple)": {
-      "module": "custom_nodes.was-node-suite-comfyui",
-      "schema": "sha256:78e8f6e9384a32e64b3bc442"
+    "CheckpointLoaderSimple": {
+      "module": "nodes",
+      "schema": "sha256:48abe86c1bc9fe331d3afb2e"
     },
     "ConditioningZeroOut": {
       "module": "nodes",
@@ -55,7 +55,7 @@
     }
   },
   "files": {
-    "Checkpoint Loader (Simple).ckpt_name": [
+    "CheckpointLoaderSimple.ckpt_name": [
       "Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors"
     ],
     "DualCLIPLoader.clip_name1": [
