@@ -188,8 +188,8 @@ func fieldComment(in schema.Input) string {
 				opts = append(opts, fmt.Sprint(o))
 			}
 			s := strings.Join(opts, "|")
-			if len(s) > 80 {
-				s = s[:77] + "..."
+			if r := []rune(s); len(r) > 80 {
+				s = string(r[:77]) + "..."
 			}
 			parts = append(parts, s)
 		}

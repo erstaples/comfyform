@@ -1,0 +1,74 @@
+{
+  "comfyui_version": "0.37.0",
+  "classes": {
+    "CLIPTextEncode": {
+      "module": "nodes",
+      "schema": "sha256:c391173e6158f2700cb7c8c9"
+    },
+    "Checkpoint Loader (Simple)": {
+      "module": "custom_nodes.was-node-suite-comfyui",
+      "schema": "sha256:78e8f6e9384a32e64b3bc442"
+    },
+    "ConditioningZeroOut": {
+      "module": "nodes",
+      "schema": "sha256:bf48f71def08870446a547d6"
+    },
+    "DualCLIPLoader": {
+      "module": "nodes",
+      "schema": "sha256:b002c6c6961ecb5db568f018"
+    },
+    "EmptyLatentImage": {
+      "module": "nodes",
+      "schema": "sha256:4a1e8deae14d5c2ada4d1a0d"
+    },
+    "EmptySD3LatentImage": {
+      "module": "comfy_extras.nodes_sd3",
+      "schema": "sha256:4a1e8deae14d5c2ada4d1a0d"
+    },
+    "FluxGuidance": {
+      "module": "comfy_extras.nodes_flux",
+      "schema": "sha256:42a52691fee17d25facb7ced"
+    },
+    "KSampler": {
+      "module": "nodes",
+      "schema": "sha256:9bb8dab51fdefa092f7d92e5"
+    },
+    "LatentUpscaleBy": {
+      "module": "nodes",
+      "schema": "sha256:a149764f119e4f3dee5003e1"
+    },
+    "SaveImage": {
+      "module": "nodes",
+      "schema": "sha256:6d9777b003e2e19156dd0f3f"
+    },
+    "UNETLoader": {
+      "module": "nodes",
+      "schema": "sha256:49e1a0cc0650b953eaa16108"
+    },
+    "VAEDecode": {
+      "module": "nodes",
+      "schema": "sha256:f9b3a7e662ad7bf6e085c398"
+    },
+    "VAELoader": {
+      "module": "nodes",
+      "schema": "sha256:ebd89ac2188a6e16c0c46ee0"
+    }
+  },
+  "files": {
+    "Checkpoint Loader (Simple).ckpt_name": [
+      "Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors"
+    ],
+    "DualCLIPLoader.clip_name1": [
+      "clip_l.safetensors"
+    ],
+    "DualCLIPLoader.clip_name2": [
+      "t5xxl_fp16.safetensors"
+    ],
+    "UNETLoader.unet_name": [
+      "flux1-dev-fp8-e4m3fn.safetensors"
+    ],
+    "VAELoader.vae_name": [
+      "ae.safetensors"
+    ]
+  }
+}
