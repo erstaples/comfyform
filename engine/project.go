@@ -241,6 +241,14 @@ type Lock struct {
 	Classes        map[string]LockedClass `json:"classes"`
 	// Files maps "Class.input" to the file values the workflows reference.
 	Files map[string][]string `json:"files"`
+	// Packs maps each custom_nodes directory a locked class comes from to
+	// the version installed at lock time.
+	Packs map[string]LockedPack `json:"packs,omitempty"`
+}
+
+type LockedPack struct {
+	Source  string `json:"source"`
+	Content string `json:"content,omitempty"`
 }
 
 func (p *Project) LoadLock() (*Lock, error) {
@@ -257,9 +265,10 @@ func (p *Project) LoadLock() (*Lock, error) {
 
 func (p *Project) SaveLock(l *Lock) error { return writeJSON(filepath.Join(p.Dir, LockFile), l) }
 
-// BuildLock records the classes and files the given prompts depend on.
-func BuildLock(prompts []graph.Prompt, s *schema.Schema, version string) *Lock {
-	l := &Lock{ComfyUIVersion: version, Classes: map[string]LockedClass{}, Files: map[string][]string{}}
+// BuildLock records the classes, files and custom node packs the given
+// prompts depend on. packs may be nil; every pack then locks as unpinned.
+func BuildLock(prompts []graph.Prompt, s *schema.Schema, version string, packs *ServerPacks) *Lock {
+	l := &Lock{ComfyUIVersion: version, Classes: map[string]LockedClass{}, Files: map[string][]string{}, Packs: map[string]LockedPack{}}
 	seen := map[string]map[string]bool{}
 	for _, pr := range prompts {
 		for _, n := range pr {
@@ -268,6 +277,15 @@ func BuildLock(prompts []graph.Prompt, s *schema.Schema, version string) *Lock {
 				continue
 			}
 			l.Classes[n.Class] = LockedClass{Module: c.Module, Schema: c.Hash()}
+			if dir := PackDir(c.Module); dir != "" {
+				lp := LockedPack{Source: Unpinned}
+				if packs != nil {
+					if pi, ok := packs.Packs[dir]; ok {
+						lp = LockedPack{Source: pi.Source(), Content: pi.Content}
+					}
+				}
+				l.Packs[dir] = lp
+			}
 			for _, in := range c.Inputs {
 				if !in.IsFileList() {
 					continue

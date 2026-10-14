@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -297,7 +298,11 @@ func (ss *session) plan(ctx context.Context, verbose bool) (*engine.Plan, *engin
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	pl, err := engine.MakePlan(prev, p, s, lock)
+	var packs *engine.ServerPacks
+	if live {
+		packs = ss.client.Packs(ctx)
+	}
+	pl, err := engine.MakePlan(prev, p, s, lock, packs)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -424,7 +429,8 @@ func cmdLock(ctx context.Context, args []string) error {
 		}
 		ps = append(ps, p)
 	}
-	l := engine.BuildLock(ps, s, ss.client.Version(ctx))
+	packs := ss.client.Packs(ctx)
+	l := engine.BuildLock(ps, s, ss.client.Version(ctx), packs)
 	if err := ss.proj.SaveLock(l); err != nil {
 		return err
 	}
@@ -432,7 +438,25 @@ func cmdLock(ctx context.Context, args []string) error {
 	for _, v := range l.Files {
 		files += len(v)
 	}
-	fmt.Printf("Locked %d node classes and %d model/input files across stacks: %s\n", len(l.Classes), files, strings.Join(stacks, ", "))
+	var unpinned []string
+	for dir, lp := range l.Packs {
+		if lp.Source == engine.Unpinned {
+			unpinned = append(unpinned, dir)
+		}
+	}
+	sort.Strings(unpinned)
+	fmt.Printf("Locked %d node classes, %d model/input files and %d custom node packs across stacks: %s\n",
+		len(l.Classes), files, len(l.Packs), strings.Join(stacks, ", "))
+	switch {
+	case len(l.Packs) == 0:
+	case packs == nil:
+		fmt.Println("Packs are unpinned: the server has neither the comfyform helper nor ComfyUI-Manager (see helper/README.md).")
+	case len(unpinned) > 0:
+		fmt.Printf("Unpinned (%s can't identify them): %s\n", packs.From, strings.Join(unpinned, ", "))
+		if packs.From != "comfyform-helper" {
+			fmt.Println("Install the comfyform helper to pin these (see helper/README.md).")
+		}
+	}
 	return nil
 }
 

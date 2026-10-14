@@ -111,7 +111,7 @@ func TestPlanKinds(t *testing.T) {
 	delete(next, "12")               // drop the seed node...
 	next["3"].Inputs["seed"] = 7.0   // ...and inline the seed
 
-	pl, err := MakePlan(prev, next, s, nil)
+	pl, err := MakePlan(prev, next, s, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
