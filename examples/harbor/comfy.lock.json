@@ -77,7 +77,8 @@
   },
   "packs": {
     "was-node-suite-comfyui": {
-      "source": "git+https://github.com/ltdrdata/was-node-suite-comfyui@44de705818d4663fefefde57ffe0ea5a9ea39df4"
+      "source": "git+https://github.com/ltdrdata/was-node-suite-comfyui@44de705818d4663fefefde57ffe0ea5a9ea39df4",
+      "content": "sha256:af8935b53d5a4167d61cbc74f3f535f714aa88976a3d28b7c72dd5308bd8629a"
     }
   }
 }

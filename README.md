@@ -109,7 +109,7 @@ Server resolution: `-server` > stack file `"server"` > `comfy.json` > `$COMFY_SE
 
 ## Known gaps / next steps
 
-- **Lock** pins custom node packs (git commit, Registry version, or content hash) when the server runs the [comfyform helper](helper/README.md), and git commits only via ComfyUI-Manager otherwise. Model files are pinned by *name*; hashes could come from the same helper.
+- **Lock** pins custom node packs (git commit, Registry version, or content hash) when the server runs the [comfyform helper](https://github.com/erstaples/comfyform-helper), and git commits only via ComfyUI-Manager otherwise. Model files are pinned by *name*; hashes could come from the same helper.
 - **Progress** is polled from `/history`. Switching to the websocket would give per-node progress and previews.
 - **Output cache** is per stack and per apply. A content-addressed store keyed by node hash would let stacks share results.
 - **UI export** (UI-format JSON with auto-layout) isn't implemented; `comfy graph` gives a Mermaid/DOT view instead.

@@ -450,11 +450,11 @@ func cmdLock(ctx context.Context, args []string) error {
 	switch {
 	case len(l.Packs) == 0:
 	case packs == nil:
-		fmt.Println("Packs are unpinned: the server has neither the comfyform helper nor ComfyUI-Manager (see helper/README.md).")
+		fmt.Println("Packs are unpinned: the server has neither the comfyform helper nor ComfyUI-Manager (https://github.com/erstaples/comfyform-helper).")
 	case len(unpinned) > 0:
 		fmt.Printf("Unpinned (%s can't identify them): %s\n", packs.From, strings.Join(unpinned, ", "))
 		if packs.From != "comfyform-helper" {
-			fmt.Println("Install the comfyform helper to pin these (see helper/README.md).")
+			fmt.Println("Install the comfyform helper to pin these (https://github.com/erstaples/comfyform-helper).")
 		}
 	}
 	return nil
