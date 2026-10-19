@@ -8,7 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -333,6 +335,107 @@ func TestLoadFromZip(t *testing.T) {
 	fromDir := mustLoad(t, os.DirFS(hiresDir))
 	if fromZip.Digest != fromDir.Digest {
 		t.Fatalf("zip digest %s, directory digest %s", fromZip.Digest, fromDir.Digest)
+	}
+}
+
+// zipFS writes files into a zip archive and reads it back as an fs.FS, the
+// way an upload loads.
+func zipFS(t *testing.T, files map[string][]byte) fs.FS {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for _, name := range slices.Sorted(maps.Keys(files)) {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write(files[name]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return zr
+}
+
+// TestLoadRefusesControlCharactersInPaths: a path that holds a NUL and a
+// newline can hold the digest lines of other files, so two packages with
+// different files could share a digest. These two would.
+func TestLoadRefusesControlCharactersInPaths(t *testing.T) {
+	hexOf := func(b []byte) string {
+		sum := sha256.Sum256(b)
+		return hex.EncodeToString(sum[:])
+	}
+	m1 := readFile(t, hiresDir+"/blueprint.json")
+	m2 := bytes.Replace(m1, []byte(`"title": "Hires pass"`), []byte(`"title": "Another pass"`), 1)
+	g := readFile(t, hiresDir+"/graph.json")
+	x, y := []byte("x"), []byte("y")
+	// a's crafted path holds b's lines for "a" and blueprint.json; b's holds
+	// the rest of a's crafted line and a's blueprint.json line.
+	aName := "a\x00" + hexOf(x) + "\nblueprint.json\x00" + hexOf(m2) + "\nc"
+	bName := "c\x00" + hexOf(y) + "\nblueprint.json"
+	a := map[string][]byte{aName: y, manifestFile: m1, groupFile: g}
+	b := map[string][]byte{"a": x, manifestFile: m2, bName: m1, groupFile: g}
+	if Digest(a) != Digest(b) {
+		t.Fatalf("the crafted packages no longer collide: %s and %s", Digest(a), Digest(b))
+	}
+
+	for _, c := range []struct {
+		files map[string][]byte
+		bad   string
+	}{{a, aName}, {b, bName}} {
+		p, err := Load(zipFS(t, c.files))
+		if err == nil {
+			t.Fatalf("Load accepted %q, digest %s", c.bad, p.Digest)
+		}
+		if want := fmt.Sprintf("%q", c.bad); !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q does not name %s", err, want)
+		}
+	}
+
+	// Any byte below 0x20, and 0x7f, is refused, in a file's name or a
+	// directory's; other bytes are not.
+	for name, refused := range map[string]string{
+		"a\tb": "a\tb", "a\x1fb": "a\x1fb", "a\x7fb": "a\x7fb", "docs/a\nb.md": "docs/a\nb.md", "a\rb/c": "a\rb",
+	} {
+		fsys := dirFiles(t, hiresDir)
+		fsys[name] = &fstest.MapFile{Data: []byte("x")}
+		if _, err := Load(fsys); err == nil || !strings.Contains(err.Error(), fmt.Sprintf("%q", refused)) {
+			t.Errorf("Load with %q: %v", name, err)
+		}
+	}
+	fsys := dirFiles(t, hiresDir)
+	fsys["notes é ~.md"] = &fstest.MapFile{Data: []byte("x")}
+	mustLoad(t, fsys)
+}
+
+// TestFixtureDigests pins each fixture's digest, so a change to how Load
+// reads files or how Digest hashes them shows here.
+func TestFixtureDigests(t *testing.T) {
+	want := map[string]string{
+		"hires":          "sha256:54498c0e4e7d1245fb36527db1726a408e008c9ce95135ca5325838b9233d657",
+		"nested-group":   "sha256:2a4574b8110197c8a2474014ee041f3a8bd1e9c8853c3807b353c4aa520e128b",
+		"nested-program": "sha256:35c2d842d56c8688d18d456b318d5690092dadaf590b2ef7a6de7374e3f0d7f6",
+		"ref-group":      "sha256:c6b9b46df0779a5ea88ca9847f64f2cf7995ff8d5269155ac72c635d9472c9b0",
+		"ref-program":    "sha256:aa36c040a68436139b51cd4e06f3451f8616332971e1ed8aab49d73aebf8d541",
+		"refine-passes":  "sha256:ff7b61fe72cc2663d14f4c11fdc45aac7e87a7b5fb5b49a8b5566fa313dbe2ec",
+	}
+	entries, err := os.ReadDir("testdata/packages")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if got := mustLoad(t, os.DirFS("testdata/packages/"+e.Name())).Digest; got != want[e.Name()] {
+			t.Errorf("%s digest = %s, want %s", e.Name(), got, want[e.Name()])
+		}
+	}
+	if len(entries) != len(want) {
+		t.Errorf("%d fixtures, %d digests pinned", len(entries), len(want))
 	}
 }
 

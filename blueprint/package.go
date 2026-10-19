@@ -90,7 +90,10 @@ func Load(fsys fs.FS) (*Package, error) {
 // readFiles reads every counted file of a package. Names that start with a
 // dot, and anything under a directory that does, are left out: they are the
 // debris of the machine a package was made on (.DS_Store, .git) and do not
-// count against MaxPackageBytes.
+// count against MaxPackageBytes. A path with a control character is refused:
+// Digest separates a path from its hash with a NUL and ends the line with a
+// newline, so a path holding those could hold other files' lines, and two
+// packages with different files could share a digest.
 func readFiles(fsys fs.FS) (map[string][]byte, error) {
 	files := map[string][]byte{}
 	left := MaxPackageBytes
@@ -103,6 +106,9 @@ func readFiles(fsys fs.FS) (map[string][]byte, error) {
 				return fs.SkipDir
 			}
 			return nil
+		}
+		if strings.ContainsFunc(path, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+			return fmt.Errorf("path %q has a control character; a package's paths have none", path)
 		}
 		switch typ := d.Type(); {
 		case d.IsDir():
@@ -161,7 +167,9 @@ func parseGroup(b []byte) (graph.Prompt, error) {
 // Digest is the identity of a package's files: "sha256:" and the hex of a
 // sha256 over, for each file in order of slash path, the path, a NUL byte,
 // the hex of the sha256 of the file and a newline. It is the construction
-// comfyform-helper uses for the content of a node pack.
+// comfyform-helper uses for the content of a node pack. The lines read one
+// way only when no path has a NUL or a newline, so Load refuses a path with
+// any control character.
 func Digest(files map[string][]byte) string {
 	h := sha256.New()
 	for _, name := range slices.Sorted(maps.Keys(files)) {
