@@ -25,8 +25,8 @@
   ],
   "requires": {
     "classes": {
-      "LatentUpscaleBy": "sha256:000000000000000000000000",
-      "KSampler": "sha256:000000000000000000000000"
+      "LatentUpscaleBy": "sha256:a149764f119e4f3dee5003e1",
+      "KSampler": "sha256:9bb8dab51fdefa092f7d92e5"
     },
     "packs": {},
     "models": {}

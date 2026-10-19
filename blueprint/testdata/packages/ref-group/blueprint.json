@@ -26,10 +26,10 @@
   }],
   "requires": {
     "classes": {
-      "LoadImage": "sha256:000000000000000000000000",
-      "ImageScaleToTotalPixels": "sha256:000000000000000000000000",
-      "VAEEncode": "sha256:000000000000000000000000",
-      "ReferenceLatent": "sha256:000000000000000000000000"
+      "LoadImage": "sha256:24173251fa3ff4dd406e6e09",
+      "ImageScaleToTotalPixels": "sha256:db95bb40ca557aa4fb76a317",
+      "VAEEncode": "sha256:30d9a0d5a96b9750e7398b9a",
+      "ReferenceLatent": "sha256:e429f796976a6c46e49076be"
     },
     "packs": {},
     "models": {}
