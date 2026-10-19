@@ -1,6 +1,7 @@
 package codegen
 
 import (
+	"sort"
 	"strings"
 	"unicode"
 
@@ -122,8 +123,15 @@ func Resolve(s *schema.Schema) map[string]*Names {
 		used[n], used[n+"Args"], used[n+"Out"] = true, true, true
 		return n
 	}
+	// Classes whose name is already their Go name claim it first, so a
+	// custom "Checkpoint Loader (Simple)" can't take CheckpointLoaderSimple
+	// from core, and installing a pack doesn't rename existing bindings.
+	order := s.Names()
+	sort.SliceStable(order, func(i, j int) bool {
+		return GoName(order[i]) == order[i] && GoName(order[j]) != order[j]
+	})
 	out := map[string]*Names{}
-	for _, cn := range s.Names() {
+	for _, cn := range order {
 		c := s.Classes[cn]
 		fn := unique(GoName(cn))
 		nm := &Names{Func: fn, Args: fn + "Args", Out: fn + "Out", Inputs: map[string]string{}}
