@@ -72,6 +72,17 @@ func checkValues(t *testing.T, r *Result, values []wantValue) {
 	}
 }
 
+// checkChains checks that each source's chain joins to a prefix of its
+// node's id: the compiled prefix of the instance that made the node.
+func checkChains(t *testing.T, r *Result) {
+	t.Helper()
+	for id, s := range r.Sources {
+		if prefix := strings.Join(s.Instances, "."); !strings.HasPrefix(id, prefix+".") {
+			t.Errorf("Sources[%s].Instances = %q, which do not join to a prefix of the id", id, s.Instances)
+		}
+	}
+}
+
 func checkSources(t *testing.T, r *Result, want Source, ids ...string) {
 	t.Helper()
 	for _, id := range ids {
@@ -557,6 +568,7 @@ func TestDepthLimit(t *testing.T) {
 	checkLinks(t, r, []wantLink{{inner, "samples", ref{"17", 0}}, {"18", "samples", ref{inner, 0}}})
 	want := Source{Instances: append([]string{"14"}, slices.Repeat([]string{"n"}, 8)...), Blueprint: "test/p8@1.0.0"}
 	checkSources(t, r, want, inner)
+	checkChains(t, r)
 
 	// A ninth level is one too many.
 	pkgs = chain(t, 10)
@@ -584,6 +596,7 @@ func TestDepthLimit(t *testing.T) {
 	}
 	checkIDs(t, r, append([]string{"14.7.5.1", "14.7.5.2"}, hiresOuterIDs...))
 	checkSources(t, r, Source{Instances: []string{"14", "7", "5"}, Blueprint: "test/hires@1.0.0"}, "14.7.5.1", "14.7.5.2")
+	checkChains(t, r)
 	checkLinks(t, r, []wantLink{{"14.7.5.1", "samples", ref{"17", 0}}, {"18", "samples", ref{"14.7.5.2", 0}}})
 	_, err = compile([]*Package{og, ng, hires}, 1)
 	e = asError(t, err)
@@ -636,8 +649,12 @@ func TestItemInherited(t *testing.T) {
 		r := mustCompile(t, nestedGraph(t, each, map[string]any{"denoises": []any{0.3, 0.5}}), each, hires)
 		checkIDs(t, r, append(copyIDs("14", 2, "5.1", "5.2"), hiresOuterIDs...))
 		for k := range 2 {
-			want := Source{Instances: []string{"14", "5"}, Blueprint: "test/hires@1.0.0", Item: &Item{Setting: "denoises", Index: k}}
+			want := Source{Instances: []string{"14", fmt.Sprintf("r%d.5", k)}, Blueprint: "test/hires@1.0.0", Item: &Item{Setting: "denoises", Index: k}}
 			checkSources(t, r, want, fmt.Sprintf("14.r%d.5.1", k), fmt.Sprintf("14.r%d.5.2", k))
+		}
+		// The instance node 5 makes in each copy has a chain of its own.
+		if a, b := r.Sources["14.r0.5.1"].Instances, r.Sources["14.r1.5.1"].Instances; reflect.DeepEqual(a, b) {
+			t.Errorf("copies 0 and 1 of node 5 share the chain %q", a)
 		}
 		checkLinks(t, r, []wantLink{
 			{"14.r0.5.1", "samples", ref{"17", 0}},
@@ -666,12 +683,16 @@ func TestItemInherited(t *testing.T) {
 			`return {"latent": lat}`), []Setting{denoises}, hires, rg)
 		r := mustCompile(t, nestedGraph(t, p, map[string]any{"denoises": []any{0.3, 0.5}}), p, hires, rg)
 		for k := range 2 {
-			want := Source{Instances: []string{"14", "h"}, Blueprint: "test/hires@1.0.0", Item: &Item{Setting: "denoises", Index: k}}
+			want := Source{Instances: []string{"14", fmt.Sprintf("p%d.h", k)}, Blueprint: "test/hires@1.0.0", Item: &Item{Setting: "denoises", Index: k}}
 			checkSources(t, r, want, fmt.Sprintf("14.p%d.h.1", k), fmt.Sprintf("14.p%d.h.2", k))
 			// ref-group's copies are its images, but Source.Item names a
 			// setting of the instance in the graph: the child's item.
-			want = Source{Instances: []string{"14", "refs"}, Blueprint: "test/ref-group@1.0.0", Item: &Item{Setting: "denoises", Index: 0}}
+			want = Source{Instances: []string{"14", "tagged.refs"}, Blueprint: "test/ref-group@1.0.0", Item: &Item{Setting: "denoises", Index: 0}}
 			checkSources(t, r, want, fmt.Sprintf("14.tagged.refs.r%d.1", k), fmt.Sprintf("14.tagged.refs.r%d.4", k))
+		}
+		// The two uses named h, in children p0 and p1, have a chain each.
+		if a, b := r.Sources["14.p0.h.1"].Instances, r.Sources["14.p1.h.1"].Instances; reflect.DeepEqual(a, b) {
+			t.Errorf("the uses in p0 and p1 share the chain %q", a)
 		}
 		checkLinks(t, r, []wantLink{
 			{"14.p1.h.1", "samples", ref{"14.p0.h.2", 0}},
@@ -705,7 +726,7 @@ func TestItemInherited(t *testing.T) {
 		r := mustCompile(t, nestedGraph(t, each, map[string]any{"scales": []any{2.0, 3.0}}), each, tagger)
 		var ids []string
 		for k := range 2 {
-			want := Source{Instances: []string{"14", "5"}, Blueprint: "test/tagger@1.0.0", Item: &Item{Setting: "scales", Index: k}}
+			want := Source{Instances: []string{"14", fmt.Sprintf("r%d.5", k)}, Blueprint: "test/tagger@1.0.0", Item: &Item{Setting: "scales", Index: k}}
 			for j := range 2 {
 				id := fmt.Sprintf("14.r%d.5.t%d.up", k, j)
 				ids = append(ids, id)
@@ -729,8 +750,11 @@ func TestItemInherited(t *testing.T) {
 		e := compileError(t, nestedGraph(t, each, map[string]any{"scales": []any{2.0}}), each, bad)
 		wantMsg(t, e, "class Foo is not on this server")
 		if !reflect.DeepEqual(e.Item, &Item{Setting: "names", Index: 1}) || e.Blueprint != "test/tagger@1.0.0" ||
-			!reflect.DeepEqual(e.Instances, []string{"14", "5"}) {
+			!reflect.DeepEqual(e.Instances, []string{"14", "r0.5"}) {
 			t.Fatalf("got %+v (item %+v)", e, e.Item)
+		}
+		if want := "14.r0.5 (test/tagger@1.0.0) names[1]: main.star:2: class Foo is not on this server"; e.Error() != want {
+			t.Fatalf("Error() = %q, want %q", e.Error(), want)
 		}
 	})
 }

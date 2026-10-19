@@ -90,6 +90,7 @@ func mustCompile(t *testing.T, g graph.Prompt, pkgs ...*Package) *Result {
 	if err != nil {
 		t.Fatalf("Compile: %v", err)
 	}
+	checkChains(t, r)
 	return r
 }
 

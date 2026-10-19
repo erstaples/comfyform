@@ -76,7 +76,11 @@ type Result struct {
 // Source is where a compiled node came from.
 type Source struct {
 	// Instances is the chain of instances from the input graph inward:
-	// ["14"], or ["14", "base"] for a node of an instance nested in 14.
+	// ["14"], or ["14", "base"] for a node of an instance nested in 14. Each
+	// part after the first is the nested instance's compiled prefix past its
+	// parent instance's, so the parts joined with dots are the prefix of the
+	// innermost instance: ["14", "p0.h"] for a ctx.use named h in the child
+	// p0, ["14", "r1.5"] for node 5 of a node group in copy 1 of a repeat.
 	Instances []string `json:"instances"`
 	// Blueprint is the innermost instance's id@version.
 	Blueprint string `json:"blueprint"`
@@ -358,7 +362,8 @@ func isInstance(n *graph.Node) bool { return n != nil && strings.HasPrefix(n.Cla
 // nest expands an instance of the blueprint id that uses pins, named name in
 // f: a node group's node id, or a program's ctx.use name. Its nodes go out
 // under f.prefix + "." + name, its sources and errors carry f's chain with
-// name added, and it is one level deeper than f. It counts against
+// that prefix's part past the prefix of the instance f is in added, and it
+// is one level deeper than f. It counts against
 // opt.MaxNodes like a node. Its nodes' Source.Item is f's; its errors name
 // f's item unless it tags its own. version, when not "", is the version the
 // instance's class names. fill gives what feeds the instance's inputs once
@@ -378,10 +383,14 @@ func (f *frame) nest(uses map[string]Use, id, version, name string,
 	if version != "" && version != use.Version {
 		return nil, nil, f.errorf("", "node %s: uses pins %s at %s, not %s", name, id, use.Version, version)
 	}
+	prefix := f.prefix + "." + name
 	nf := &frame{
-		b:         f.b,
-		prefix:    f.prefix + "." + name,
-		chain:     append(slices.Clone(f.chain), name),
+		b:      f.b,
+		prefix: prefix,
+		// The chain joins to the prefix: this instance's part is its prefix
+		// past that of the instance f is in, which takes in the children and
+		// repeat copies between the two ("p0.h", "r1.5").
+		chain:     append(slices.Clone(f.chain), strings.TrimPrefix(prefix, strings.Join(f.chain, ".")+".")),
 		blueprint: id + "@" + use.Version,
 		item:      f.item,
 		source:    f.source,
