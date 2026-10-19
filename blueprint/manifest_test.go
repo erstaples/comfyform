@@ -145,6 +145,9 @@ func TestManifestProblems(t *testing.T) {
 			m.Settings[2].Options = nil
 			m.Settings[2].Source = &ModelSource{Kind: "models", Folder: "checkpoints"}
 		}, "", ""},
+		{"combo with options and a models source", func(m *Manifest) {
+			m.Settings[2].Source = &ModelSource{Kind: "models", Folder: "checkpoints"}
+		}, `settings "upscale_method"`, "a combo needs options or a models source, not both"},
 		{"combo bad source kind", func(m *Manifest) {
 			m.Settings[2].Options = nil
 			m.Settings[2].Source = &ModelSource{Kind: "files", Folder: "checkpoints"}

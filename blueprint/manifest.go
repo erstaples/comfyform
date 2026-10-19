@@ -303,8 +303,15 @@ func (ps *Problems) checkSetting(where string, s Setting) {
 	if s.Step != nil && *s.Step <= 0 {
 		ps.add(where, "step must be above 0")
 	}
-	if s.Kind == KindCombo && len(s.Options) == 0 && s.Source == nil {
-		ps.add(where, "a combo needs options or a models source")
+	if s.Kind == KindCombo {
+		switch hasOptions := len(s.Options) > 0; {
+		case !hasOptions && s.Source == nil:
+			ps.add(where, "a combo needs options or a models source")
+		case hasOptions && s.Source != nil:
+			// Compile checks a value against options, and not at all with a
+			// source, so a combo with both would take any string.
+			ps.add(where, "a combo needs options or a models source, not both")
+		}
 	}
 	if src := s.Source; src != nil {
 		if src.Kind != "models" {
