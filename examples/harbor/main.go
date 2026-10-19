@@ -2,7 +2,7 @@
 // Juggernaut XL ("sdxl", the default) or Flux.1 dev ("flux"). Stacks:
 //
 //	preview  768px, few steps, for iterating on the prompt
-//	final    1024px, full steps, plus a 1.5x latent hires pass
+//	final    1024px, full steps, a 1.5x latent hires pass, and film grain
 //	sweep    one render per CFG value, sharing the checkpoint and prompt
 //	flux     Flux.1 dev at 1024px
 package main
@@ -61,7 +61,7 @@ func main() {
 				g := gen
 				g.CFG = c
 				b := ctx.Child(fmt.Sprintf("cfg%03d", int(c*10)))
-				Save(b, m, Txt2Img(b, m, g), fmt.Sprintf("harbor_cfg%03d", int(c*10)))
+				Save(b, m, Txt2Img(b, m, g), fmt.Sprintf("harbor_cfg%03d", int(c*10)), false)
 			}
 			return nil
 		}
@@ -70,7 +70,7 @@ func main() {
 		if cfg.Bool("hires") {
 			lat = Hires(ctx.Child("hires"), m, lat, gen, 1.5, 0.4)
 		}
-		Save(ctx.Child("out"), m, lat, "harbor_"+ctx.Stack())
+		Save(ctx.Child("out"), m, lat, "harbor_"+ctx.Stack(), cfg.Bool("grain"))
 		return nil
 	})
 }
@@ -147,8 +147,13 @@ func Hires(ctx *comfy.Context, m Model, in graph.Ref[nodes.LATENT], g Gen, scale
 	}).Latent
 }
 
-// Save decodes and writes the image.
-func Save(ctx *comfy.Context, m Model, lat graph.Ref[nodes.LATENT], prefix string) {
+// Save decodes, optionally adds film grain (from was-node-suite), and saves.
+func Save(ctx *comfy.Context, m Model, lat graph.Ref[nodes.LATENT], prefix string, grain bool) {
 	img := nodes.VAEDecode(ctx, "decode", nodes.VAEDecodeArgs{Samples: lat, Vae: m.VAE}).Image
+	if grain {
+		img = nodes.ImageFilmGrain(ctx, "grain", nodes.ImageFilmGrainArgs{
+			Image: img, Density: 0.25, Intensity: 0.12, Highlights: 1,
+		}).Image
+	}
 	nodes.SaveImage(ctx, "save", nodes.SaveImageArgs{Images: img, FilenamePrefix: prefix})
 }

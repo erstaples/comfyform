@@ -75,7 +75,8 @@ func (p *Plan) Count(k ChangeKind) int {
 
 // MakePlan diffs next against the last applied prompt, validates it against
 // the server schema, and checks for drift against the lockfile.
-func MakePlan(prev *State, next graph.Prompt, s *schema.Schema, lock *Lock) (*Plan, error) {
+// packs is what the server reports about custom node packs, or nil.
+func MakePlan(prev *State, next graph.Prompt, s *schema.Schema, lock *Lock, packs *ServerPacks) (*Plan, error) {
 	hashes, err := next.Hashes()
 	if err != nil {
 		return nil, err
@@ -113,7 +114,7 @@ func MakePlan(prev *State, next graph.Prompt, s *schema.Schema, lock *Lock) (*Pl
 	}
 	if s != nil {
 		pl.Problems = append(pl.Problems, Validate(next, s)...)
-		pl.Problems = append(pl.Problems, Drift(next, s, lock)...)
+		pl.Problems = append(pl.Problems, Drift(next, s, lock, packs)...)
 	}
 	return pl, nil
 }
@@ -383,8 +384,9 @@ func validateLiteral(add func(Severity, string, string, ...any), id string, in s
 	}
 }
 
-// Drift compares the classes this prompt uses with the lockfile.
-func Drift(p graph.Prompt, s *schema.Schema, l *Lock) []Problem {
+// Drift compares the classes this prompt uses, and the packs they come from,
+// with the lockfile. Packs are skipped when the server reports none.
+func Drift(p graph.Prompt, s *schema.Schema, l *Lock, packs *ServerPacks) []Problem {
 	if l == nil {
 		return nil
 	}
@@ -409,8 +411,36 @@ func Drift(p graph.Prompt, s *schema.Schema, l *Lock) []Problem {
 		case lc.Module != c.Module:
 			probs = append(probs, Problem{Sev: Warn, Msg: fmt.Sprintf("drift: %s now comes from %s (locked: %s)", cls, c.Module, lc.Module)})
 		}
+		if dir := PackDir(c.Module); dir != "" && !seen["pack:"+dir] {
+			seen["pack:"+dir] = true
+			probs = append(probs, packDrift(dir, l, packs)...)
+		}
 	}
 	return probs
+}
+
+func packDrift(dir string, l *Lock, packs *ServerPacks) []Problem {
+	if packs == nil {
+		return nil
+	}
+	warn := func(format string, args ...any) []Problem {
+		return []Problem{{Sev: Warn, Msg: "drift: " + fmt.Sprintf(format, args...)}}
+	}
+	lp, ok := l.Packs[dir]
+	if !ok {
+		return warn("pack %s is not in %s (run comfy lock)", dir, LockFile)
+	}
+	pi, ok := packs.Packs[dir]
+	if !ok || lp.Source == Unpinned {
+		return nil
+	}
+	if src := pi.Source(); src != lp.Source {
+		return warn("pack %s is now %s (locked: %s)", dir, src, lp.Source)
+	}
+	if lp.Content != "" && pi.Content != "" && pi.Content != lp.Content {
+		return warn("pack %s has local changes since lock (same %s, different files)", dir, lp.Source)
+	}
+	return nil
 }
 
 // --- rendering ---

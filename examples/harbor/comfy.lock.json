@@ -29,6 +29,10 @@
       "module": "comfy_extras.nodes_flux",
       "schema": "sha256:42a52691fee17d25facb7ced"
     },
+    "Image Film Grain": {
+      "module": "custom_nodes.was-node-suite-comfyui",
+      "schema": "sha256:8fa6d8877e9b22a781a94c55"
+    },
     "KSampler": {
       "module": "nodes",
       "schema": "sha256:9bb8dab51fdefa092f7d92e5"
@@ -70,5 +74,11 @@
     "VAELoader.vae_name": [
       "ae.safetensors"
     ]
+  },
+  "packs": {
+    "was-node-suite-comfyui": {
+      "source": "git+https://github.com/ltdrdata/was-node-suite-comfyui@44de705818d4663fefefde57ffe0ea5a9ea39df4",
+      "content": "sha256:af8935b53d5a4167d61cbc74f3f535f714aa88976a3d28b7c72dd5308bd8629a"
+    }
   }
 }

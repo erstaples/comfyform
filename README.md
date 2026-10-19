@@ -31,7 +31,7 @@ Plan: 0 to add, 2 to change, 4 to rerun, 0 to remove, 2 unchanged.
 | plan | compile, diff against the last apply, validate against the live server, check lock drift |
 | apply | queue, wait, download outputs to `out/<stack>/<node>/` |
 | state | `.comfy/state/<stack>.json`: last applied graph + Merkle hashes per node |
-| lockfile | `comfy.lock.json`: interface hash + python module per node class, and referenced model files |
+| lockfile | `comfy.lock.json`: interface hash + python module per node class, the custom node packs they come from, and referenced model files |
 
 ## Quick start
 
@@ -88,7 +88,7 @@ Node ids are the dotted names (`hires.sampler`), so diffs stay meaningful across
 - Link types are compatible; slot indices exist.
 - Combo values are valid. For model files, that doubles as "is this model on the server".
 - Numeric bounds.
-- Drift: node classes whose interface or python module changed since `comfy lock`.
+- Drift: node classes whose interface or python module changed since `comfy lock`, and custom node packs now at a different commit or version, or with edited files.
 
 Apply refuses to queue when there are errors, and skips the server entirely when every output node's Merkle hash matches the last apply and the files are on disk (`-force` overrides).
 
@@ -109,7 +109,7 @@ Server resolution: `-server` > stack file `"server"` > `comfy.json` > `$COMFY_SE
 
 ## Known gaps / next steps
 
-- **Lock** pins node interfaces and model file *names*, not custom node git commits or model hashes. Commits could come from ComfyUI-Manager's API; hashes need a server-side helper node.
+- **Lock** pins custom node packs (git commit, Registry version, or content hash) when the server runs the [comfyform helper](https://github.com/erstaples/comfyform-helper), and git commits only via ComfyUI-Manager otherwise. Model files are pinned by *name*; hashes could come from the same helper.
 - **Progress** is polled from `/history`. Switching to the websocket would give per-node progress and previews.
 - **Output cache** is per stack and per apply. A content-addressed store keyed by node hash would let stacks share results.
 - **UI export** (UI-format JSON with auto-layout) isn't implemented; `comfy graph` gives a Mermaid/DOT view instead.
