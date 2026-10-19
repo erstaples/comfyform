@@ -27,7 +27,7 @@ repository; its storage, endpoints and screens are not covered here.
 | `ParseManifest([]byte) (*Manifest, error)` | decodes a `blueprint.json` and runs the checks that need no other file |
 | `Digest(map[string][]byte) string` | the digest of a set of files |
 | `ParseClass(string)`, `(*Manifest).Class()` | convert between an id and version and a `bp:` class name |
-| `Compile(graph.Prompt, Options) (*Result, error)` | expands the instances of a graph |
+| `Compile(context.Context, graph.Prompt, Options) (*Result, error)` | expands the instances of a graph |
 | `Diff`, `LevelOf`, `CheckVersion` | interface differences and version bumps |
 | `Classes`, `SchemaClasses(*schema.Schema)` | what compile and the checks need to know of a server's node classes |
 | `Resolver` | how compile finds a package by digest |
@@ -39,7 +39,7 @@ for programs and type checks, `Classes`. `SchemaClasses` adapts a parsed
 ```go
 pkg, err := blueprint.Load(os.DirFS("reference-images"))
 
-res, err := blueprint.Compile(prompt, blueprint.Options{
+res, err := blueprint.Compile(ctx, prompt, blueprint.Options{
     Classes:  blueprint.SchemaClasses(s),
     Packages: store, // implements Package(digest)
 })
@@ -66,13 +66,17 @@ Exactly one of `graph.json` and `main.star`.
 - Names that start with `.`, and everything under a directory that does, are
   ignored: they do not count toward the digest or the size cap.
 - Symlinks and other non-regular files are refused.
+- A path with a control character, any byte below 0x20 or 0x7f, is refused:
+  the digest separates a path from its hash with a NUL and ends each line with
+  a newline, so a path holding those could hold other files' lines.
 - The files add up to at most `MaxPackageBytes` (1 MiB).
 
 `Load` returns `(nil, Problems)` when a check fails. `Problems` is an error that
 holds a `Problem{Where, Msg}` per finding, one per line when printed; get the
 list with `errors.As`. A package that cannot be read at all (a missing
 `blueprint.json`, JSON that does not parse, an unknown manifest field, a
-symlink, a package over the cap) is a plain error.
+symlink, a path with a control character, a package over the cap) is a plain
+error.
 
 **Digest.** `"sha256:"` and the hex of a sha256 over, for each counted file in
 order of slash path, `path`, a NUL byte, the hex sha256 of the file's bytes and a
@@ -166,9 +170,9 @@ A setting is a value a person gives an instance, as opposed to a link.
 | `linkable` | whether a link in the graph may feed the setting |
 | `to` | node group only: the node inputs the setting fills |
 
-A `combo` needs `options` or a `source`. An `int` holds a whole number and a
-`seed` a whole number of 0 or more. A `default` is checked against the kind and
-bounds; a list's default must be a list within `list` bounds.
+A `combo` needs `options` or a `source`, not both. An `int` holds a whole
+number and a `seed` a whole number of 0 or more. A `default` is checked against
+the kind and bounds; a list's default must be a list within `list` bounds.
 
 A setting is a value unless it is `linkable`. `seed` is linkable by default;
 set `"linkable": false` to turn that off. A list cannot be linkable. A linked
@@ -352,10 +356,26 @@ or `None`, and `settings` that map setting names to literals, socket references
 **Setting values.** An `int` or `seed` is an int; a `float` a float; `string`,
 `combo` and `image` strings; `bool` a bool. A list setting is a frozen list. A
 list longer than its `list.max` is rejected before the program runs, as is any
-value outside the manifest's kind, bounds or options. A linked setting is a
-socket reference; using it for anything but `ctx.node` or a linkable setting of
-a `ctx.use` fails with `setting seed is linked; this blueprint needs a value`.
-A socket reference supports no arithmetic, comparison or hashing.
+value outside the manifest's kind, bounds or options.
+
+A linked setting is a socket reference, for passing to `ctx.node` or to a
+linkable setting of a `ctx.use`. Not every other use fails:
+
+- These fail with `setting seed is linked; this blueprint needs a value`:
+  arithmetic and unary operators, `==` between two references, hashing (as a
+  dict key), `x in settings.seed`, and passing it as a `ctx.use` input port.
+- These fail with Starlark's own error: ordering comparisons (`<`, `>=`),
+  iteration, `len`, `int()` and `%d`, and `json.encode`.
+- These pass silently, since starlark-go has no hook for them: truthiness
+  (`if settings.seed:` is always taken, `not settings.seed` is `False`),
+  `str()` and `%s` formatting (which give `<ref setting seed>`), and `==` or
+  `!=` against a value of another type (`settings.seed == 0` is `False`).
+
+So do not branch on a setting that can be linked; read it only to pass it on.
+The socket references of ports and node outputs answer operators the same way,
+failing with `a socket reference can only be passed to ctx.node`; unlike a
+linked setting, they may also feed a `ctx.use` input port and be returned from
+`build`.
 
 ## Sandbox
 
@@ -369,7 +389,8 @@ rest) are available. `print` is discarded.
 - The dialect options are all off: no `while`, no recursion, no `set`, no `if`
   or `for` at the top level, no reassigning a global.
 - Each program runs on its own thread, with a step limit and a cancel timer
-  (Limits).
+  (Limits). The thread is also cancelled when the compile's budget runs out or
+  its context ends.
 
 The same graph, settings and package digests always compile to the same graph.
 
@@ -419,17 +440,20 @@ An instance is an entry of the API-format graph:
 ## Compile
 
 ```go
-func Compile(p graph.Prompt, opt Options) (*Result, error)
+func Compile(ctx context.Context, p graph.Prompt, opt Options) (*Result, error)
 ```
 
 | `Options` field | Meaning |
 |---|---|
 | `Classes` | the server's node classes; programs need it |
 | `Packages` | the `Resolver`; a graph with instances needs it |
-| `MaxNodes`, `MaxDepth`, `Steps`, `Timeout` | limits; zero takes the default |
+| `MaxNodes`, `MaxDepth`, `Steps`, `Timeout`, `Budget` | limits; zero takes the default |
 
 `Compile` only reads `Options` and the packages, so one `Options` value can
 serve compiles that run at once. It does not change `p`.
+
+A compile stops at the earlier of `ctx`'s end and `Budget` after `Compile`
+starts (Limits).
 
 A graph with no instances comes back as `p` itself, with no sources. Otherwise:
 
@@ -448,8 +472,9 @@ A graph with no instances comes back as `p` itself, with no sources. Otherwise:
    id equal to an id the input graph already has is an error, so a graph with
    dotted ids can collide.
 
-`Result.Prompt` is normalized: links are `[]any{id, float64}`, the form JSON
-decodes them in. Compiling the reference-images instance above with two images
+When the graph has instances, `Result.Prompt` is a new graph, normalized: links
+are `[]any{id, float64}`, the form JSON decodes them in. Without instances it is
+`p` as given. Compiling the reference-images instance above with two images
 gives, with `20` a KSampler that took `["14", 0]` as its positive conditioning:
 
 ```
@@ -486,9 +511,19 @@ graph have no entry.
 
 | Field | Meaning |
 |---|---|
-| `Instances` | the chain of instances from the input graph inward: `["14"]`, or `["14", "base"]` for a node of an instance nested in 14 |
+| `Instances` | the chain of instances from the input graph inward: `["14"]`, or `["14", "base"]` for a node of an instance nested in 14. Each part after the first is the nested instance's compiled prefix past its parent instance's, so the parts joined with dots are the innermost instance's prefix |
 | `Blueprint` | the innermost instance's `id@version` |
 | `Item` | `{Setting, Index}`: the list element or repeat copy the node was made for. Absent when there is none |
+
+A part takes in the program children and repeat copies between the parent
+instance and the nested one:
+
+| Nested instance | Its nodes | `Instances` |
+|---|---|---|
+| `ctx.use(..., "base")` at the top of 14's program | `14.base.1` | `["14", "base"]` |
+| `ctx.use(..., "h")` in `ctx.child("p0")` | `14.p0.h.1` | `["14", "p0.h"]` |
+| node 5 of 14's node group, in copy 1 of a repeat | `14.r1.5.1` | `["14", "r1.5"]` |
+| node 5 of node 7 of 14's node group | `14.7.5.1` | `["14", "7", "5"]` |
 
 `Source.Item` names a setting of the outermost instance, `Instances[0]`, the one
 the input graph holds: its repeat copy, or the item its program's `ctx.child`
@@ -515,15 +550,25 @@ knows:
 | `Setting` | the setting it is about, a setting of `Blueprint` |
 | `Item` | the repeat copy or `ctx.child` item in effect where it was raised: one the raising blueprint made itself, else the one inherited from the instance it is nested in |
 | `Msg` | the message |
+| `Err` | `ctx.Err()` when the compile's context ended it, else nil; `Unwrap` returns it |
 
-`Error()` writes the instance chain joined with dots, the blueprint in
-parentheses, the item as `setting[index]`, and then the message, prefixed with
-`setting <name>: ` unless it names the setting already:
+`Error.Setting` names a setting of the blueprint that raised the error, the
+innermost one in `Instances`, and `Error.Item` that blueprint's own item or one
+inherited from an instance it is nested in. `Source.Item` always names a setting
+of the outermost instance, `Instances[0]`. A host that maps errors to the
+settings of the instance in the graph should use `Setting` and `Item` only when
+`len(Instances) == 1`.
+
+`Error()` writes the instance chain joined with dots, which is the innermost
+instance's prefix, the blueprint in parentheses, the item as `setting[index]`,
+and then the message, prefixed with `setting <name>: ` unless it names the
+setting already:
 
 ```
 14 (erstaples/reference-images@1.0.0): setting images: item 1 must be a string, got 3
 14 (erstaples/hires@1.0.0): main.star:2: fail: no good
 14 (erstaples/hires@1.0.0): main.star:2: setting seed is linked; this blueprint needs a value
+14.p0.h (erstaples/hires@1.0.0) denoises[0]: setting denoise: must be at most 1
 ```
 
 An error from a program starts its message with the line of `main.star`. A
@@ -535,16 +580,28 @@ mistake in `Options` (no `Packages`) is a plain error.
 |---|---|---|
 | Starlark steps | 10,000,000 per instance | `Options.Steps` |
 | Starlark time | 2 s per instance, from a cancel timer | `Options.Timeout` |
-| Compiled nodes | 2,000 per compile | `Options.MaxNodes` |
+| Compile time | 10 s per compile, from when `Compile` starts | `Options.Budget` |
+| Compiled nodes | 2,000 nodes and nested instances per compile | `Options.MaxNodes` |
 | Nesting | 8 levels of `uses` below the instance in the graph | `Options.MaxDepth` |
 | Package size | 1 MiB | `MaxPackageBytes` |
 | `json.decode` nesting | 1,000 levels | fixed |
 
 `MaxNodes` counts nodes and nested instance expansions, so repeats and instances
-that fan out to no nodes are bounded too. A program that runs out of steps fails
-with `Starlark computation cancelled: too many steps`; one that runs out of time
-fails with `Starlark computation cancelled: timeout`. The timer cancels the
-thread between steps (see Sandbox).
+that fan out to no nodes are bounded too; past it a compile fails with
+`compile makes more than 2000 nodes and nested instances`. A program that runs
+out of steps fails with `Starlark computation cancelled: too many steps`; one
+that runs out of time fails with `Starlark computation cancelled: timeout`.
+
+`Steps` and `Timeout` bound one instance; `Budget` bounds the whole compile, so
+a repeat of many program copies, each inside its own limits, still stops. The
+compile stops at the earlier of `Budget` after `Compile` starts and the end of
+`ctx`: no node or nested instance starts after that, and a running program's
+thread is cancelled. Past the budget the compile fails with an `*Error` that
+says `compile took longer than 10s`, with `Budget` in place of 10s, and has no
+`Err`. When `ctx` ends first, the `*Error` says `compile stopped: context
+canceled` (or `context deadline exceeded`) and its `Err` is `ctx.Err()`, so
+`errors.Is(err, context.Canceled)` holds. The timers and `ctx` cancel a thread
+between steps (see Sandbox).
 
 ## Versions
 

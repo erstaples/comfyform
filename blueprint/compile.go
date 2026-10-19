@@ -62,8 +62,10 @@ func (o Options) withDefaults() Options {
 
 // Result is a compiled graph and where its nodes came from.
 type Result struct {
-	// Prompt is a graph a stock ComfyUI server runs, normalized: its links
-	// are []any{id, float64}, the form JSON decodes them in.
+	// Prompt is a graph a stock ComfyUI server runs. When the input graph
+	// has instances it is a new graph, normalized: its links are
+	// []any{id, float64}, the form JSON decodes them in. Otherwise it is the
+	// input graph itself, as given.
 	Prompt graph.Prompt
 	// Sources has one entry for each node compile made, by compiled id.
 	// Nodes copied from the input graph have none.
@@ -102,6 +104,13 @@ type Item struct {
 // Error is a compile failure, placed as precisely as compile knows: the
 // instance chain, the innermost blueprint, and the setting and item it is
 // about.
+//
+// Setting is a setting of Blueprint, the innermost instance in Instances.
+// Item is the item that blueprint tagged, else one it inherited from an
+// instance it is nested in, so it may name a setting of any instance in the
+// chain. Source.Item, by contrast, always names a setting of Instances[0].
+// A host that maps errors to the settings of the instance in the graph
+// should read Setting and Item only when len(Instances) == 1.
 type Error struct {
 	Instances []string
 	Blueprint string
