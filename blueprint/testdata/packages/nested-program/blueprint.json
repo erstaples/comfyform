@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "id": "test/nested-program",
+  "version": "1.0.0",
+  "title": "Hires pass, from a program",
+  "description": "Runs test/hires as base, passing its ports and two of its settings through.",
+  "inputs": [
+    { "name": "model", "type": "MODEL" },
+    { "name": "positive", "type": "CONDITIONING" },
+    { "name": "negative", "type": "CONDITIONING" },
+    { "name": "samples", "type": "LATENT" }
+  ],
+  "outputs": [
+    { "name": "latent", "type": "LATENT" }
+  ],
+  "settings": [
+    { "name": "denoise", "kind": "float", "default": 0.45, "min": 0, "max": 1 },
+    { "name": "seed", "kind": "seed", "default": 0 }
+  ],
+  "requires": {
+    "classes": {
+      "LatentUpscaleBy": "sha256:a149764f119e4f3dee5003e1",
+      "KSampler": "sha256:9bb8dab51fdefa092f7d92e5"
+    },
+    "packs": {},
+    "models": {}
+  },
+  "uses": {
+    "test/hires": { "version": "1.0.0", "digest": "sha256:54498c0e4e7d1245fb36527db1726a408e008c9ce95135ca5325838b9233d657" }
+  }
+}

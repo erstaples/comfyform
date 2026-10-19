@@ -92,6 +92,13 @@ Node ids are the dotted names (`hires.sampler`), so diffs stay meaningful across
 
 Apply refuses to queue when there are errors, and skips the server entirely when every output node's Merkle hash matches the last apply and the files are on disk (`-force` overrides).
 
+## Blueprints
+
+The `blueprint` package reads shareable, versioned pieces of graph: a manifest plus a saved group of nodes or a Starlark program, with declared sockets and settings. A list setting makes a blueprint repeat part of itself once per item.
+`blueprint.Compile` expands every instance in a graph into plain nodes, so ComfyUI still receives an ordinary API-format graph, and returns a source map from each compiled node back to the instance, setting and item that made it.
+Packages are pinned by content digest, and `blueprint.CheckVersion` refuses a version number that understates an interface change.
+The format and the Go API are in [docs/design/blueprints.md](docs/design/blueprints.md).
+
 ## Commands
 
 ```
@@ -113,4 +120,5 @@ Server resolution: `-server` > stack file `"server"` > `comfy.json` > `$COMFY_SE
 - **Progress** is polled from `/history`. Switching to the websocket would give per-node progress and previews.
 - **Output cache** is per stack and per apply. A content-addressed store keyed by node hash would let stacks share results.
 - **UI export** (UI-format JSON with auto-layout) isn't implemented; `comfy graph` gives a Mermaid/DOT view instead.
+- **Blueprint memory isolation**: the Starlark sandbox limits steps and time, not memory or the work inside one builtin call. Compile untrusted blueprints in a separate process with memory and time limits.
 - Node ids contain dots. ComfyUI's API treats ids as opaque strings, but if a custom node chokes on that, ids are easy to remap at queue time.

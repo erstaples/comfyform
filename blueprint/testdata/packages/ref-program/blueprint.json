@@ -1,0 +1,29 @@
+{
+  "format": 1,
+  "id": "test/ref-program",
+  "version": "1.0.0",
+  "title": "Reference images",
+  "inputs": [
+    { "name": "conditioning", "type": "CONDITIONING" },
+    { "name": "vae", "type": "VAE" }
+  ],
+  "outputs": [
+    { "name": "conditioning", "type": "CONDITIONING" }
+  ],
+  "settings": [
+    { "name": "images", "kind": "image", "list": { "min": 0, "max": 8 } },
+    { "name": "megapixels", "kind": "float", "default": 1.0, "min": 0.25, "max": 4, "step": 0.05 },
+    { "name": "upscale_method", "kind": "combo", "options": ["lanczos", "bicubic", "area"], "default": "lanczos" }
+  ],
+  "requires": {
+    "classes": {
+      "LoadImage": "sha256:24173251fa3ff4dd406e6e09",
+      "ImageScaleToTotalPixels": "sha256:db95bb40ca557aa4fb76a317",
+      "VAEEncode": "sha256:30d9a0d5a96b9750e7398b9a",
+      "ReferenceLatent": "sha256:e429f796976a6c46e49076be"
+    },
+    "packs": {},
+    "models": {}
+  },
+  "uses": {}
+}

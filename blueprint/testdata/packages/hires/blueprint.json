@@ -1,0 +1,35 @@
+{
+  "format": 1,
+  "id": "test/hires",
+  "version": "1.0.0",
+  "title": "Hires pass",
+  "description": "Upscales a latent and refines it with a second sampler pass.",
+  "inputs": [
+    { "name": "model", "type": "MODEL", "to": [{ "nodeId": "2", "input": "model" }] },
+    { "name": "positive", "type": "CONDITIONING", "to": [{ "nodeId": "2", "input": "positive" }] },
+    { "name": "negative", "type": "CONDITIONING", "to": [{ "nodeId": "2", "input": "negative" }] },
+    { "name": "samples", "type": "LATENT", "to": [{ "nodeId": "1", "input": "samples" }] }
+  ],
+  "outputs": [
+    { "name": "latent", "type": "LATENT", "from": { "nodeId": "2", "output": 0 } }
+  ],
+  "settings": [
+    { "name": "scale_by", "kind": "float", "default": 1.5, "min": 1, "max": 4,
+      "to": [{ "nodeId": "1", "input": "scale_by" }] },
+    { "name": "denoise", "kind": "float", "default": 0.45, "min": 0, "max": 1,
+      "to": [{ "nodeId": "2", "input": "denoise" }] },
+    { "name": "steps", "kind": "int", "default": 14, "min": 1, "max": 100,
+      "to": [{ "nodeId": "2", "input": "steps" }] },
+    { "name": "seed", "kind": "seed", "default": 0,
+      "to": [{ "nodeId": "2", "input": "seed" }] }
+  ],
+  "requires": {
+    "classes": {
+      "LatentUpscaleBy": "sha256:a149764f119e4f3dee5003e1",
+      "KSampler": "sha256:9bb8dab51fdefa092f7d92e5"
+    },
+    "packs": {},
+    "models": {}
+  },
+  "uses": {}
+}
