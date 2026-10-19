@@ -1,6 +1,7 @@
 package blueprint
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +30,7 @@ type Options struct {
 	MaxDepth int           // uses nesting below an instance; 0 means 8
 	Steps    uint64        // Starlark steps per instance; 0 means 10,000,000
 	Timeout  time.Duration // Starlark time per instance; 0 means 2 seconds
+	Budget   time.Duration // time for the whole compile, from when Compile starts; 0 means 10 seconds
 }
 
 const (
@@ -36,6 +38,7 @@ const (
 	defaultMaxDepth = 8
 	defaultSteps    = 10_000_000
 	defaultTimeout  = 2 * time.Second
+	defaultBudget   = 10 * time.Second
 )
 
 func (o Options) withDefaults() Options {
@@ -50,6 +53,9 @@ func (o Options) withDefaults() Options {
 	}
 	if o.Timeout <= 0 {
 		o.Timeout = defaultTimeout
+	}
+	if o.Budget <= 0 {
+		o.Budget = defaultBudget
 	}
 	return o
 }
@@ -98,7 +104,14 @@ type Error struct {
 	Setting   string
 	Item      *Item
 	Msg       string
+	// Err is ctx.Err() when the compile's ctx ended it, and nil otherwise.
+	// Unwrap returns it, so errors.Is(err, context.Canceled) reads it. A
+	// compile that runs past Options.Budget has no Err.
+	Err error
 }
+
+// Unwrap returns e.Err.
+func (e *Error) Unwrap() error { return e.Err }
 
 // Error reads "14 (test/hires@1.0.0): setting denoise: must be at most 1".
 // A Msg that already names its setting ("setting seed is linked", or
@@ -136,7 +149,14 @@ func (e *Error) Error() string {
 // A graph with no instances comes back as p itself. Otherwise the result is a
 // new, normalized graph; Compile never changes p or the packages, and makes
 // no calls but to opt.Packages. Failures about an instance are *Error.
-func Compile(p graph.Prompt, opt Options) (*Result, error) {
+//
+// The compile stops at the earlier of ctx's end and opt.Budget after Compile
+// starts: no node or nested instance starts after that, and a running
+// program's thread is cancelled. Past the budget the *Error says "compile
+// took longer than" the budget; when ctx ends it first, the *Error wraps
+// ctx.Err().
+func Compile(ctx context.Context, p graph.Prompt, opt Options) (*Result, error) {
+	start := time.Now()
 	ids := p.IDs()
 	var instIDs []string
 	for _, id := range ids {
@@ -164,7 +184,10 @@ func Compile(p graph.Prompt, opt Options) (*Result, error) {
 		return nil, err
 	}
 
-	b := &build{opt: opt.withDefaults(), outer: p, out: graph.Prompt{}, sources: map[string]Source{}, packages: map[string]*Package{}}
+	opt = opt.withDefaults()
+	ctx, cancel := context.WithDeadlineCause(ctx, start.Add(opt.Budget), errOverBudget)
+	defer cancel()
+	b := &build{ctx: ctx, opt: opt, outer: p, out: graph.Prompt{}, sources: map[string]Source{}, packages: map[string]*Package{}}
 	for _, in := range order {
 		if err := b.instance(in, insts); err != nil {
 			return nil, err
@@ -208,11 +231,15 @@ type ref struct {
 
 func (r *ref) link() graph.AnyRef { return graph.Link(r.node, r.out) }
 
+// errOverBudget is the cause of a compile's ctx ending at Options.Budget.
+var errOverBudget = errors.New("compile budget spent")
+
 // build is the output of one Compile call as it grows.
 type build struct {
-	opt      Options      // with the defaults filled in
-	outer    graph.Prompt // the graph being compiled; read only
-	out      graph.Prompt // the compiled graph
+	ctx      context.Context // ends at the caller's ctx's end or at the budget, whichever is first
+	opt      Options         // with the defaults filled in
+	outer    graph.Prompt    // the graph being compiled; read only
+	out      graph.Prompt    // the compiled graph
 	sources  map[string]Source
 	nodes    int                 // nodes emitted and instances nested, counted against opt.MaxNodes
 	packages map[string]*Package // the packages nested instances use, by digest
@@ -253,13 +280,32 @@ func (f *frame) tag(it *Item) {
 
 // take counts one more node or nested instance against opt.MaxNodes. An
 // instance counts even when it makes no node, so instances that fan out to
-// nothing cannot run without bound.
+// nothing cannot run without bound. Once the compile has stopped, take
+// refuses.
 func (f *frame) take() error {
+	if e := f.stopped(); e != nil {
+		return e
+	}
 	if f.b.nodes >= f.b.opt.MaxNodes {
 		return f.errorf("", "compile makes more than %d nodes", f.b.opt.MaxNodes)
 	}
 	f.b.nodes++
 	return nil
+}
+
+// stopped is the error for going on with a compile that has run past its
+// budget or whose ctx has ended, or nil while it may go on.
+func (f *frame) stopped() *Error {
+	err := f.b.ctx.Err()
+	if err == nil {
+		return nil
+	}
+	if context.Cause(f.b.ctx) == errOverBudget {
+		return f.errorf("", "compile took longer than %v", f.b.opt.Budget)
+	}
+	e := f.errorf("", "compile stopped: %v", err)
+	e.Err = err
+	return e
 }
 
 func (it *Item) clone() *Item {
@@ -295,7 +341,11 @@ func (f *frame) emit(name string, n *graph.Node) (id string, err error) {
 // expand emits the nodes of an instance of pkg, given the compiled sockets
 // behind its input ports and its settings' values (a *ref for a linked
 // setting). It returns the compiled socket behind each output port, by name.
+// It starts nothing once the compile has stopped.
 func (f *frame) expand(pkg *Package, inputs map[string]*ref, settings map[string]any) (map[string]*ref, error) {
+	if e := f.stopped(); e != nil {
+		return nil, e
+	}
 	if pkg.Form == FormProgram {
 		return f.expandProgram(pkg, inputs, settings)
 	}
@@ -314,9 +364,13 @@ func isInstance(n *graph.Node) bool { return n != nil && strings.HasPrefix(n.Cla
 // instance's class names. fill gives what feeds the instance's inputs once
 // its manifest is known; nest checks that against the manifest as it checks
 // an instance in the graph. nest returns the instance's manifest and the
-// compiled socket behind each output port.
+// compiled socket behind each output port. Once the compile has stopped,
+// nest refuses.
 func (f *frame) nest(uses map[string]Use, id, version, name string,
 	fill func(nf *frame, m *Manifest) (feed, error)) (*Manifest, map[string]*ref, error) {
+	if e := f.stopped(); e != nil {
+		return nil, nil, e
+	}
 	use, ok := uses[id]
 	if !ok {
 		return nil, nil, f.errorf("", "%s is not in uses", id)

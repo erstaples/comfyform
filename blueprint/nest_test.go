@@ -2,7 +2,9 @@ package blueprint
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -11,6 +13,7 @@ import (
 	"sync"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/erstaples/comfyform/graph"
 )
@@ -488,7 +491,7 @@ func TestUseDigestMismatch(t *testing.T) {
 				for k, v := range c.served {
 					served[k] = v
 				}
-				_, err := Compile(nestedGraph(t, outer.p, nil), Options{Classes: fixtureClasses(t), Packages: served})
+				_, err := Compile(context.Background(), nestedGraph(t, outer.p, nil), Options{Classes: fixtureClasses(t), Packages: served})
 				e := asError(t, err)
 				wantMsg(t, e, c.want)
 				if !reflect.DeepEqual(e.Instances, []string{"14", outer.name}) {
@@ -540,7 +543,7 @@ func TestDepthLimit(t *testing.T) {
 	compile := func(pkgs []*Package, maxDepth int) (*Result, error) {
 		opt := options(t, pkgs...)
 		opt.MaxDepth = maxDepth
-		return Compile(nestedGraph(t, pkgs[0], nil), opt)
+		return Compile(context.Background(), nestedGraph(t, pkgs[0], nil), opt)
 	}
 
 	// The outer instance and 8 levels below it compile.
@@ -763,7 +766,7 @@ func TestNodeLimit(t *testing.T) {
 	rg := loadRefGroup(t)
 	opt := options(t, rg)
 	opt.MaxNodes = 10
-	_, err := Compile(refGraph(t, rg, "a.png", "b.png", "c.png"), opt)
+	_, err := Compile(context.Background(), refGraph(t, rg, "a.png", "b.png", "c.png"), opt)
 	wantMsg(t, asError(t, err), "compile makes more than 10 nodes")
 
 	// Nested nodes count against the limit too, and so does the nested
@@ -771,11 +774,11 @@ func TestNodeLimit(t *testing.T) {
 	ng, hires := loadNestedGroup(t), loadHires(t)
 	opt = options(t, ng, hires)
 	opt.MaxNodes = 3
-	if _, err := Compile(nestedGraph(t, ng, nil), opt); err != nil {
+	if _, err := Compile(context.Background(), nestedGraph(t, ng, nil), opt); err != nil {
 		t.Fatalf("1 instance and 2 nodes, MaxNodes 3: %v", err)
 	}
 	opt.MaxNodes = 2
-	_, err = Compile(nestedGraph(t, ng, nil), opt)
+	_, err = Compile(context.Background(), nestedGraph(t, ng, nil), opt)
 	e := asError(t, err)
 	wantMsg(t, e, "compile makes more than 2 nodes")
 	if !reflect.DeepEqual(e.Instances, []string{"14", "5"}) {
@@ -822,7 +825,7 @@ func TestNodeLimitCountsNestedInstances(t *testing.T) {
 	pkgs := fanOut(t, 2, 3)
 	opt := options(t, pkgs...)
 	opt.MaxNodes = 12
-	r, err := Compile(nestedGraph(t, pkgs[0], nil), opt)
+	r, err := Compile(context.Background(), nestedGraph(t, pkgs[0], nil), opt)
 	if err != nil {
 		t.Fatalf("12 instances, MaxNodes 12: %v", err)
 	}
@@ -832,13 +835,128 @@ func TestNodeLimitCountsNestedInstances(t *testing.T) {
 		t.Fatalf("Sources = %v", r.Sources)
 	}
 	opt.MaxNodes = 11
-	_, err = Compile(nestedGraph(t, pkgs[0], nil), opt)
+	_, err = Compile(context.Background(), nestedGraph(t, pkgs[0], nil), opt)
 	wantMsg(t, asError(t, err), "compile makes more than 11 nodes")
 
 	// The reviewer's shape, 10 to a level, stops at the default limit.
 	pkgs = fanOut(t, 4, 10)
-	_, err = Compile(nestedGraph(t, pkgs[0], nil), options(t, pkgs...))
+	_, err = Compile(context.Background(), nestedGraph(t, pkgs[0], nil), options(t, pkgs...))
 	wantMsg(t, asError(t, err), "compile makes more than 2000 nodes")
+}
+
+// countTo is a program test/slow that counts to n before it gives its latent
+// straight back.
+func countTo(t *testing.T, n int) *Package {
+	t.Helper()
+	return simpleProgram(t, "test/slow", latentPort, latentPort, nil, nil, prog(
+		`x = 0`, fmt.Sprintf(`for i in range(%d):`, n), `    x += 1`, `return {"latent": inputs.latent}`))
+}
+
+// slowEach is a node group test/slow-each that repeats an instance of slow,
+// node 5, copies times, each copy taking the latent of the copy before.
+func slowEach(t *testing.T, slow *Package) *Package {
+	t.Helper()
+	manifest := fmt.Sprintf(`{
+  "format": 1, "id": "test/slow-each", "version": "1.0.0", "title": "Slow copies",
+  "inputs": [{ "name": "latent", "type": "LATENT", "to": [{ "nodeId": "5", "input": "latent" }] }],
+  "outputs": [{ "name": "latent", "type": "LATENT", "from": { "nodeId": "5", "output": 0 } }],
+  "settings": [{ "name": "copies", "kind": "int", "default": 1, "min": 0, "max": 64 }],
+  "repeats": [{ "nodes": ["5"], "count": "copies",
+                "carry": [{ "to": { "nodeId": "5", "input": "latent" }, "from": { "nodeId": "5", "output": 0 } }] }],
+  "requires": { "classes": {} },
+  "uses": { "test/slow": { "version": "1.0.0", "digest": %q } }
+}`, slow.Digest)
+	group := fmt.Sprintf(`{
+  "5": { "class_type": "bp:test/slow@1.0.0", "inputs": { "latent": ["in", 0] }, "_meta": { "blueprint": %q } }
+}`, slow.Digest)
+	return mustLoad(t, fstest.MapFS{
+		"blueprint.json": {Data: []byte(manifest)},
+		"graph.json":     {Data: []byte(group)},
+	})
+}
+
+// forever is more counting than any test waits for.
+const forever = 1_000_000_000_000
+
+// TestBudget: Steps and Timeout bound one instance, and Budget the whole
+// compile, so a repeat of program copies, each inside its own limits, stops
+// when the compile's time is spent.
+func TestBudget(t *testing.T) {
+	if got := (Options{}).withDefaults().Budget; got != 10*time.Second {
+		t.Fatalf("default Budget = %v", got)
+	}
+
+	// Each copy takes about 100ms, ten times that under -race; 40 of them
+	// take seconds.
+	slow := countTo(t, 4_500_000)
+	each := slowEach(t, slow)
+	opt := options(t, each, slow)
+	opt.Steps, opt.Timeout, opt.Budget = 1<<62, time.Minute, 300*time.Millisecond
+	start := time.Now()
+	_, err := Compile(context.Background(), nestedGraph(t, each, map[string]any{"copies": 40.0}), opt)
+	elapsed := time.Since(start)
+	e := asError(t, err)
+	wantMsg(t, e, "compile took longer than 300ms")
+	if errors.Is(err, context.DeadlineExceeded) || e.Err != nil {
+		t.Fatalf("a spent budget reads as ctx's error: %+v", e)
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("a 300ms budget stopped the compile after %v", elapsed)
+	}
+
+	// A program that is running when the budget is spent is cancelled then,
+	// not at its own timeout.
+	p := countTo(t, forever)
+	opt = options(t, p)
+	opt.Steps, opt.Timeout, opt.Budget = 1<<62, time.Minute, 100*time.Millisecond
+	start = time.Now()
+	_, err = Compile(context.Background(), nestedGraph(t, p, nil), opt)
+	if elapsed := time.Since(start); elapsed > 30*time.Second {
+		t.Fatalf("a 100ms budget stopped the compile after %v", elapsed)
+	}
+	e = asError(t, err)
+	if e.Msg != "compile took longer than 100ms" || !reflect.DeepEqual(e.Instances, []string{"14"}) || e.Blueprint != "test/slow@1.0.0" {
+		t.Fatalf("got %+v", e)
+	}
+}
+
+// TestCompileCancelled: a compile stops when its ctx is done, with an
+// *Error that wraps ctx's error.
+func TestCompileCancelled(t *testing.T) {
+	// Done before compile starts: the first node is refused.
+	hires := loadHires(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := Compile(ctx, hiresGraph(t, hires), options(t, hires))
+	e := asError(t, err)
+	if !errors.Is(err, context.Canceled) || e.Msg != "compile stopped: context canceled" ||
+		!reflect.DeepEqual(e.Instances, []string{"21"}) {
+		t.Fatalf("got %+v", e)
+	}
+
+	// Cancelled while a program runs: its thread stops.
+	p := countTo(t, forever)
+	opt := options(t, p)
+	opt.Steps, opt.Timeout, opt.Budget = 1<<62, time.Minute, time.Minute
+	ctx, cancel = context.WithCancel(context.Background())
+	time.AfterFunc(50*time.Millisecond, cancel)
+	start := time.Now()
+	_, err = Compile(ctx, nestedGraph(t, p, nil), opt)
+	if elapsed := time.Since(start); elapsed > 30*time.Second {
+		t.Fatalf("cancelled after 50ms, the compile stopped after %v", elapsed)
+	}
+	if e := asError(t, err); !errors.Is(err, context.Canceled) || e.Msg != "compile stopped: context canceled" {
+		t.Fatalf("got %+v", e)
+	}
+
+	// A ctx deadline before the budget's end is ctx's error, not the
+	// budget's.
+	ctx, cancel = context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, err = Compile(ctx, nestedGraph(t, p, nil), opt)
+	if e := asError(t, err); !errors.Is(err, context.DeadlineExceeded) || e.Msg != "compile stopped: context deadline exceeded" {
+		t.Fatalf("got %+v", e)
+	}
 }
 
 // concurrentGraph is refGraph with a ref-group instance "14" feeding a
@@ -886,7 +1004,7 @@ func TestCompileConcurrent(t *testing.T) {
 	errs := make([]error, len(got))
 	for i := range got {
 		wg.Go(func() {
-			r, err := Compile(g, opt)
+			r, err := Compile(context.Background(), g, opt)
 			if err == nil {
 				got[i], err = json.Marshal(r)
 			}

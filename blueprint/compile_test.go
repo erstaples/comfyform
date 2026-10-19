@@ -2,6 +2,7 @@ package blueprint
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -85,7 +86,7 @@ func options(t *testing.T, pkgs ...*Package) Options {
 
 func mustCompile(t *testing.T, g graph.Prompt, pkgs ...*Package) *Result {
 	t.Helper()
-	r, err := Compile(g, options(t, pkgs...))
+	r, err := Compile(context.Background(), g, options(t, pkgs...))
 	if err != nil {
 		t.Fatalf("Compile: %v", err)
 	}
@@ -94,7 +95,7 @@ func mustCompile(t *testing.T, g graph.Prompt, pkgs ...*Package) *Result {
 
 func compileError(t *testing.T, g graph.Prompt, pkgs ...*Package) *Error {
 	t.Helper()
-	r, err := Compile(g, options(t, pkgs...))
+	r, err := Compile(context.Background(), g, options(t, pkgs...))
 	if err == nil {
 		t.Fatalf("Compile succeeded with nodes %v", r.Prompt.IDs())
 	}
@@ -150,7 +151,7 @@ func TestCompileWithoutInstances(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := Compile(g, Options{})
+	r, err := Compile(context.Background(), g, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -392,7 +393,7 @@ func TestResolverServesAnotherDigest(t *testing.T) {
 	hires := loadHires(t)
 	g := hiresGraph(t, hires)
 	g["21"].Meta.Blueprint = digest64
-	_, err := Compile(g, Options{Packages: liar{hires}})
+	_, err := Compile(context.Background(), g, Options{Packages: liar{hires}})
 	var e *Error
 	if !errors.As(err, &e) {
 		t.Fatalf("err = %v", err)

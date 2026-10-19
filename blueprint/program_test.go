@@ -2,6 +2,7 @@ package blueprint
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -227,17 +228,27 @@ var loop = prog(`x = 0`, `for i in range(100000000):`, `    x += 1`, passThrough
 func TestProgramStepLimit(t *testing.T) {
 	p := programPkg(t, loop)
 	opt := options(t, p)
-	opt.Timeout = time.Minute // so the default step limit comes first, even under -race
-	_, err := Compile(programGraph(p, nil), opt)
+	// so the default step limit comes first, even under -race
+	opt.Timeout, opt.Budget = time.Minute, time.Minute
+	_, err := Compile(context.Background(), programGraph(p, nil), opt)
 	wantMsg(t, asError(t, err), "too many steps")
 }
 
+// TestProgramTimeout: an instance's own timer stops it, with a compile
+// budget well beyond it.
 func TestProgramTimeout(t *testing.T) {
 	p := programPkg(t, loop)
 	opt := options(t, p)
-	opt.Steps, opt.Timeout = 1<<62, 50*time.Millisecond
-	_, err := Compile(programGraph(p, nil), opt)
-	wantMsg(t, asError(t, err), "cancelled")
+	opt.Steps, opt.Timeout, opt.Budget = 1<<62, 50*time.Millisecond, time.Minute
+	start := time.Now()
+	_, err := Compile(context.Background(), programGraph(p, nil), opt)
+	if elapsed := time.Since(start); elapsed > 30*time.Second {
+		t.Fatalf("a 50ms timeout took %v", elapsed)
+	}
+	e := asError(t, err)
+	if !strings.HasPrefix(e.Msg, "main.star:") || !strings.HasSuffix(e.Msg, ": Starlark computation cancelled: timeout") || e.Err != nil {
+		t.Fatalf("got %+v", e)
+	}
 }
 
 func TestProgramNoWhile(t *testing.T) {
@@ -379,7 +390,7 @@ func TestProgramConcurrent(t *testing.T) {
 	errs := make([]error, len(got))
 	for i := range got {
 		wg.Go(func() {
-			r, err := Compile(g, opt)
+			r, err := Compile(context.Background(), g, opt)
 			if err == nil {
 				got[i], err = json.Marshal(r)
 			}
@@ -465,7 +476,7 @@ func TestProgramInputValues(t *testing.T) {
 
 func TestProgramNeedsClasses(t *testing.T) {
 	p := programPkg(t, prog(passThrough))
-	_, err := Compile(programGraph(p, nil), Options{Packages: resolverOf(p)})
+	_, err := Compile(context.Background(), programGraph(p, nil), Options{Packages: resolverOf(p)})
 	wantMsg(t, asError(t, err), "Options.Classes")
 }
 

@@ -1,6 +1,7 @@
 package blueprint
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -85,7 +86,9 @@ func jsonDepth(s string) int {
 
 // expandProgram runs main.star's build(ctx, inputs, settings) in a sandbox on
 // a thread of its own, with the step limit and cancel timer of opt, and
-// returns the compiled socket behind each output port. ctx emits under the
+// returns the compiled socket behind each output port. The thread is also
+// cancelled when the compile stops, at its budget or its ctx's end,
+// whichever comes before the instance's own timer. ctx emits under the
 // frame's prefix; inputs holds a socket reference for each port, or None for
 // an optional port with nothing behind it; settings holds each setting's
 // value, or a socket reference for a linked one.
@@ -115,6 +118,8 @@ func (f *frame) expandProgram(pkg *Package, inputs map[string]*ref, settings map
 	thread.SetMaxExecutionSteps(f.b.opt.Steps)
 	timer := time.AfterFunc(f.b.opt.Timeout, func() { thread.Cancel("timeout") })
 	defer timer.Stop()
+	stop := context.AfterFunc(f.b.ctx, func() { thread.Cancel("the compile stopped") })
+	defer stop()
 
 	globals, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, programFile, pkg.Program, predeclared)
 	if err != nil {
@@ -186,7 +191,8 @@ func typesMatch(a, b string) bool { return a == b || a == "*" || b == "*" }
 // starting with the line of main.star it came from. An error the host API
 // raised keeps its setting and item. An error from an instance nested under
 // this one comes out as it is: its chain says where it is, and a line here
-// would read as a line of the nested blueprint.
+// would read as a line of the nested blueprint. Any other error from a
+// compile that has stopped is the thread's cancel, and reads as the stop.
 func (f *frame) programError(err error) *Error {
 	where, msg := programFile, err.Error()
 	var (
@@ -216,6 +222,9 @@ func (f *frame) programError(err error) *Error {
 		e := *hostErr
 		e.Msg = where + ": " + hostErr.Msg
 		return &e
+	}
+	if e := f.stopped(); e != nil {
+		return e
 	}
 	return f.errorf("", "%s: %s", where, msg)
 }

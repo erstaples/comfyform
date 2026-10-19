@@ -2,6 +2,7 @@ package blueprint
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -741,10 +742,10 @@ func TestRepeatCopiesCountAgainstTheNodeLimit(t *testing.T) {
 	rg := loadRefGroup(t)
 	opt := options(t, rg)
 	opt.MaxNodes = 10
-	if _, err := Compile(refGraph(t, rg, "a.png", "b.png"), opt); err != nil {
+	if _, err := Compile(context.Background(), refGraph(t, rg, "a.png", "b.png"), opt); err != nil {
 		t.Fatalf("8 nodes: %v", err)
 	}
-	_, err := Compile(refGraph(t, rg, "a.png", "b.png", "c.png"), opt)
+	_, err := Compile(context.Background(), refGraph(t, rg, "a.png", "b.png", "c.png"), opt)
 	if err == nil || !strings.Contains(err.Error(), "compile makes more than 10 nodes") {
 		t.Fatalf("12 nodes: err = %v", err)
 	}
