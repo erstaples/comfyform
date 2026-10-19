@@ -490,3 +490,39 @@ func TestNodeOutputs(t *testing.T) {
 		t.Fatalf("out(1) = %v, %v", v, err)
 	}
 }
+
+func TestProgramJSONDepth(t *testing.T) {
+	// starlark-go's json.decode recurses once per level with no limit, so
+	// deep enough input would overflow the Go stack and kill the process.
+	for _, expr := range []string{
+		`"[" * 100000`,
+		`'{"a":' * 100000`,
+		`'"\\\\"' + "[" * 5000`, // an escaped backslash ends the string; the brackets count
+	} {
+		t.Run(expr, func(t *testing.T) {
+			e := programError(t, programPkg(t, prog(`x = json.decode(`+expr+`)`, passThrough)))
+			wantMsg(t, e, "nested deeper than 1000")
+		})
+	}
+
+	p := programPkg(t, prog(
+		`deep = json.decode("[" * 1000 + "]" * 1000)`,
+		`for i in range(999):`,
+		`    deep = deep[0]`,
+		`if deep != []:`,
+		`    fail("depth 1000 decoded as", deep)`,
+		`s = json.decode('"' + "[" * 5000 + '"')`,
+		`if s != "[" * 5000:`,
+		`    fail("a string of brackets decoded as", s)`,
+		`q = json.decode('"\\"' + "[" * 5000 + '"')`,
+		`if q != '"' + "[" * 5000:`,
+		`    fail("an escaped quote decoded as", q)`,
+		`if json.encode({"a": [1, 2]}) != '{"a":[1,2]}':`,
+		`    fail("encode gave", json.encode({"a": [1, 2]}))`,
+		`if json.indent('{"a":1}') != '{\n\t"a": 1\n}':`,
+		`    fail("indent gave", json.indent('{"a":1}'))`,
+		`if json.encode_indent({"a": 1}) != '{\n\t"a": 1\n}':`,
+		`    fail("encode_indent gave", json.encode_indent({"a": 1}))`,
+		passThrough))
+	mustCompile(t, programGraph(p, nil), p)
+}

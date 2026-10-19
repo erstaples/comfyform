@@ -3,6 +3,7 @@ package blueprint
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"math/big"
 	"regexp"
@@ -26,7 +27,60 @@ var partName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 // load, time, randomness or I/O.
 var predeclared = starlark.StringDict{
 	"struct": starlark.NewBuiltin("struct", starlarkstruct.Make),
-	"json":   starlarkjson.Module,
+	"json":   jsonModule(),
+}
+
+// maxJSONDepth is how deeply json.decode lets arrays and objects nest.
+// starlark-go's decoder recurses once per level and has no limit of its own,
+// so input nested deeply enough overflows the Go stack, a fatal error that
+// kills the whole process before the step limit or the timer can act.
+const maxJSONDepth = 1000
+
+// jsonModule is starlark-go's json module with a decode that first refuses
+// input nested deeper than maxJSONDepth. Its other members are its own.
+func jsonModule() *starlarkstruct.Module {
+	members := maps.Clone(starlarkjson.Module.Members)
+	decode := members["decode"].(*starlark.Builtin)
+	members["decode"] = starlark.NewBuiltin(decode.Name(),
+		func(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+			if len(args) > 0 {
+				if s, ok := starlark.AsString(args[0]); ok && jsonDepth(s) > maxJSONDepth {
+					return nil, fmt.Errorf("%s: input is nested deeper than %d", decode.Name(), maxJSONDepth)
+				}
+			}
+			return decode.CallInternal(thread, args, kwargs)
+		})
+	return &starlarkstruct.Module{Name: starlarkjson.Module.Name, Members: members}
+}
+
+// jsonDepth is how deeply the arrays and objects of JSON text s nest, not
+// counting brackets inside string literals. It stops counting once past
+// maxJSONDepth, and leaves malformed text for the decoder to report.
+func jsonDepth(s string) int {
+	depth, deepest := 0, 0
+	inString, escaped := false, false
+	for i := 0; i < len(s) && deepest <= maxJSONDepth; i++ {
+		c := s[i]
+		switch {
+		case escaped:
+			escaped = false
+		case inString:
+			switch c {
+			case '\\':
+				escaped = true
+			case '"':
+				inString = false
+			}
+		case c == '"':
+			inString = true
+		case c == '[' || c == '{':
+			depth++
+			deepest = max(deepest, depth)
+		case c == ']' || c == '}':
+			depth--
+		}
+	}
+	return deepest
 }
 
 // expandProgram runs main.star's build(ctx, inputs, settings) in a sandbox on
