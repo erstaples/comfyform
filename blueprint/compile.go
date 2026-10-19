@@ -291,7 +291,7 @@ func (f *frame) take() error {
 		return e
 	}
 	if f.b.nodes >= f.b.opt.MaxNodes {
-		return f.errorf("", "compile makes more than %d nodes", f.b.opt.MaxNodes)
+		return f.errorf("", "compile makes more than %d nodes and nested instances", f.b.opt.MaxNodes)
 	}
 	f.b.nodes++
 	return nil

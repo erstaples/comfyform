@@ -378,9 +378,9 @@ func (f *frame) copies(r Repeat, settings map[string]any) (int, error) {
 	case c < 0:
 		return 0, f.errorf(r.Count, "a count must be 0 or more, got %v", c)
 	case c > float64(f.b.opt.MaxNodes):
-		// Every copy is at least one node, and an int conversion of a huge
-		// float is not to be trusted.
-		return 0, f.errorf(r.Count, "compile makes more than %d nodes", f.b.opt.MaxNodes)
+		// Every copy makes at least one node or nested instance, and an int
+		// conversion of a huge float is not to be trusted.
+		return 0, f.errorf(r.Count, "compile makes more than %d nodes and nested instances", f.b.opt.MaxNodes)
 	}
 	return int(c), nil
 }

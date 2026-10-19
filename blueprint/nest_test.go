@@ -860,7 +860,9 @@ func TestNodeLimitCountsNestedInstances(t *testing.T) {
 	}
 	opt.MaxNodes = 11
 	_, err = Compile(context.Background(), nestedGraph(t, pkgs[0], nil), opt)
-	wantMsg(t, asError(t, err), "compile makes more than 11 nodes")
+	if e := asError(t, err); e.Msg != "compile makes more than 11 nodes and nested instances" {
+		t.Fatalf("Msg = %q", e.Msg)
+	}
 
 	// The reviewer's shape, 10 to a level, stops at the default limit.
 	pkgs = fanOut(t, 4, 10)

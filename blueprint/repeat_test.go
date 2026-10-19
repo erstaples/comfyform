@@ -758,5 +758,7 @@ func TestRepeatCopiesCountAgainstTheNodeLimit(t *testing.T) {
 	if e.Setting != "passes" {
 		t.Fatalf("Setting = %q (%s)", e.Setting, e)
 	}
-	wantMsg(t, e, "compile makes more than 2000 nodes")
+	if e.Msg != "compile makes more than 2000 nodes and nested instances" {
+		t.Fatalf("Msg = %q", e.Msg)
+	}
 }
