@@ -96,7 +96,8 @@ type Error struct {
 }
 
 // Error reads "14 (test/hires@1.0.0): setting denoise: must be at most 1".
-// A Msg that already starts by naming its setting is not prefixed again.
+// A Msg that already names its setting ("setting seed is linked", or
+// "main.star:3: setting seed is linked") is not prefixed again.
 func (e *Error) Error() string {
 	var b strings.Builder
 	b.WriteString(strings.Join(e.Instances, "."))
@@ -115,7 +116,7 @@ func (e *Error) Error() string {
 	if b.Len() > 0 {
 		b.WriteString(": ")
 	}
-	if e.Setting != "" && !strings.HasPrefix(e.Msg, "setting "+e.Setting+" ") {
+	if e.Setting != "" && !strings.Contains(e.Msg, "setting "+e.Setting+" ") {
 		b.WriteString("setting " + e.Setting + ": ")
 	}
 	b.WriteString(e.Msg)
@@ -268,8 +269,8 @@ func (f *frame) emit(name string, n *graph.Node) (id string, err error) {
 // behind its input ports and its settings' values (a *ref for a linked
 // setting). It returns the compiled socket behind each output port, by name.
 func (f *frame) expand(pkg *Package, inputs map[string]*ref, settings map[string]any) (map[string]*ref, error) {
-	if pkg.Form != FormGroup {
-		return nil, f.errorf("", "blueprint programs come later")
+	if pkg.Form == FormProgram {
+		return f.expandProgram(pkg, inputs, settings)
 	}
 	return f.expandGroup(pkg, inputs, settings)
 }

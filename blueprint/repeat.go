@@ -240,7 +240,7 @@ func (ps *Problems) checkCarryTypes(where string, c Carry, g graph.Prompt, class
 		return
 	}
 	ft, tt := fc.Outputs[c.From.Output].Type, tc.Inputs[in].Type
-	if ft != tt && ft != "*" && tt != "*" {
+	if !typesMatch(ft, tt) {
 		ps.add(where, "carry types differ: %s and %s, from output %d of node %s to %s.%s",
 			ft, tt, c.From.Output, c.From.NodeID, c.To.NodeID, c.To.Input)
 	}
