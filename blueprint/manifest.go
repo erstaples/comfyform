@@ -153,7 +153,10 @@ var (
 	idPattern      = regexp.MustCompile(`^[a-z0-9-]+/[a-z0-9-]+$`)
 	versionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 	namePattern    = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
-	hexSumPattern  = regexp.MustCompile(`^sha256:[0-9a-f]+$`)
+	// classHashPattern matches a schema.Class.Hash: "sha256:" and 24 hex digits.
+	classHashPattern = regexp.MustCompile(`^sha256:[0-9a-f]{24}$`)
+	// digestPattern matches a package Digest: "sha256:" and 64 hex digits.
+	digestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 )
 
 // ParseManifest decodes a blueprint.json, rejecting fields it does not know,
@@ -412,8 +415,8 @@ func (ps *Problems) checkRequires(r Requires) {
 		if class == "" {
 			ps.add(where, "class name is empty")
 		}
-		if hash := r.Classes[class]; !hexSumPattern.MatchString(hash) {
-			ps.add(where, "hash must be sha256:<hex digits> (got %q)", hash)
+		if hash := r.Classes[class]; !classHashPattern.MatchString(hash) {
+			ps.add(where, `hash must be "sha256:" and 24 lowercase hex digits (got %q)`, hash)
 		}
 	}
 	for _, key := range slices.Sorted(maps.Keys(r.Models)) {
@@ -431,7 +434,7 @@ func (ps *Problems) checkUse(where, id string, u Use) {
 	if !versionPattern.MatchString(u.Version) {
 		ps.add(where, "version must be MAJOR.MINOR.PATCH, digits only (got %q)", u.Version)
 	}
-	if !hexSumPattern.MatchString(u.Digest) {
-		ps.add(where, "digest must be sha256:<hex digits> (got %q)", u.Digest)
+	if !digestPattern.MatchString(u.Digest) {
+		ps.add(where, `digest must be "sha256:" and 64 lowercase hex digits (got %q)`, u.Digest)
 	}
 }

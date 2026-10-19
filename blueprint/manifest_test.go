@@ -208,8 +208,14 @@ func TestManifestProblems(t *testing.T) {
 			m.Settings = append(m.Settings, Setting{Name: "photo", Kind: KindImage, Default: 4.0})
 		}, `settings "photo"`, "default must be a string"},
 
-		{"requires class empty name", func(m *Manifest) { m.Requires.Classes[""] = "sha256:aa" }, `requires.classes ""`, "class name is empty"},
-		{"requires class hash", func(m *Manifest) { m.Requires.Classes["VAEEncode"] = "md5:aa" }, `requires.classes "VAEEncode"`, "hash must be sha256:<hex digits>"},
+		{"requires class empty name", func(m *Manifest) { m.Requires.Classes[""] = hash24 }, `requires.classes ""`, "class name is empty"},
+		{"requires class hash", func(m *Manifest) { m.Requires.Classes["VAEEncode"] = "md5:aa" }, `requires.classes "VAEEncode"`, classHashMsg},
+		{"requires class hash too short", func(m *Manifest) { m.Requires.Classes["VAEEncode"] = "sha256:aa" }, `requires.classes "VAEEncode"`, classHashMsg},
+		{"requires class hash too long", func(m *Manifest) { m.Requires.Classes["VAEEncode"] = digest64 }, `requires.classes "VAEEncode"`, classHashMsg},
+		{"requires class hash uppercase", func(m *Manifest) { m.Requires.Classes["VAEEncode"] = "sha256:ABCDEFABCDEFABCDEFABCDEF" }, `requires.classes "VAEEncode"`, classHashMsg},
+		{"requires class hash not hex", func(m *Manifest) { m.Requires.Classes["VAEEncode"] = "sha256:zzzzzzzzzzzzzzzzzzzzzzzz" }, `requires.classes "VAEEncode"`, classHashMsg},
+		{"requires class hash with a newline", func(m *Manifest) { m.Requires.Classes["VAEEncode"] = hash24 + "\n" }, `requires.classes "VAEEncode"`, classHashMsg},
+		{"requires class hash ok", func(m *Manifest) { m.Requires.Classes["VAEEncode"] = "sha256:0123456789abcdef01234567" }, "", ""},
 		{"requires models key", func(m *Manifest) {
 			m.Requires.Models = map[string][]string{"CheckpointLoaderSimple": {"a.safetensors"}}
 		}, `requires.models "CheckpointLoaderSimple"`, "key must be Class.input"},
@@ -219,7 +225,13 @@ func TestManifestProblems(t *testing.T) {
 
 		{"uses id", func(m *Manifest) { m.Uses = map[string]Use{"Bad": {Version: "1.0.0", Digest: digest64}} }, `uses "Bad"`, "id must be namespace/name"},
 		{"uses version", func(m *Manifest) { m.Uses = map[string]Use{"a/b": {Version: "1", Digest: digest64}} }, `uses "a/b"`, "version must be MAJOR.MINOR.PATCH"},
-		{"uses digest", func(m *Manifest) { m.Uses = map[string]Use{"a/b": {Version: "1.0.0", Digest: "sha256:xyz"}} }, `uses "a/b"`, "digest must be sha256:<hex digits>"},
+		{"uses digest", func(m *Manifest) { m.Uses = map[string]Use{"a/b": {Version: "1.0.0", Digest: "sha256:xyz"}} }, `uses "a/b"`, useDigestMsg},
+		{"uses digest too short", func(m *Manifest) { m.Uses = map[string]Use{"a/b": {Version: "1.0.0", Digest: "sha256:aa"}} }, `uses "a/b"`, useDigestMsg},
+		{"uses digest is a class hash", func(m *Manifest) { m.Uses = map[string]Use{"a/b": {Version: "1.0.0", Digest: hash24}} }, `uses "a/b"`, useDigestMsg},
+		{"uses digest uppercase", func(m *Manifest) {
+			m.Uses = map[string]Use{"a/b": {Version: "1.0.0", Digest: "sha256:" + strings.Repeat("A", 64)}}
+		}, `uses "a/b"`, useDigestMsg},
+		{"uses digest too long", func(m *Manifest) { m.Uses = map[string]Use{"a/b": {Version: "1.0.0", Digest: digest64 + "0"}} }, `uses "a/b"`, useDigestMsg},
 		{"uses ok", func(m *Manifest) { m.Uses = map[string]Use{"a/b": {Version: "1.0.0", Digest: digest64}} }, "", ""},
 	}
 	for _, c := range cases {
@@ -246,8 +258,15 @@ func TestManifestProblems(t *testing.T) {
 	}
 }
 
-// digest64 is a well-formed package digest: "sha256:" and 64 hex digits.
-const digest64 = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+const (
+	// digest64 is a well-formed package digest: "sha256:" and 64 hex digits.
+	digest64 = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+	// hash24 is a well-formed class hash: "sha256:" and 24 hex digits.
+	hash24 = "sha256:000000000000000000000000"
+
+	classHashMsg = `hash must be "sha256:" and 24 lowercase hex digits`
+	useDigestMsg = `digest must be "sha256:" and 64 lowercase hex digits`
+)
 
 func TestManifestValidFixtureHasNoProblems(t *testing.T) {
 	if ps := checkManifest(mustParse(t, readFile(t, refGroupManifest))); len(ps) != 0 {
