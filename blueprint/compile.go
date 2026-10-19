@@ -25,7 +25,7 @@ type Resolver interface {
 type Options struct {
 	Classes  Classes
 	Packages Resolver
-	MaxNodes int           // nodes one compile may make; 0 means 2000
+	MaxNodes int           // nodes and nested instances one compile may make; 0 means 2000
 	MaxDepth int           // uses nesting below an instance; 0 means 8
 	Steps    uint64        // Starlark steps per instance; 0 means 10,000,000
 	Timeout  time.Duration // Starlark time per instance; 0 means 2 seconds
@@ -74,7 +74,11 @@ type Source struct {
 	Instances []string `json:"instances"`
 	// Blueprint is the innermost instance's id@version.
 	Blueprint string `json:"blueprint"`
-	// Item is the list element or repeat copy the node was made for.
+	// Item is the list element or repeat copy the node was made for, as an
+	// element of a list setting of the instance in the graph, Instances[0]:
+	// a copy of its repeat, or its program's tag. A nested blueprint's own
+	// copies and tags do not show here; its nodes carry the item of the
+	// outer instance they were made in.
 	Item *Item `json:"item,omitempty"`
 }
 
@@ -210,7 +214,7 @@ type build struct {
 	outer    graph.Prompt // the graph being compiled; read only
 	out      graph.Prompt // the compiled graph
 	sources  map[string]Source
-	nodes    int                 // nodes emitted, counted against opt.MaxNodes
+	nodes    int                 // nodes emitted and instances nested, counted against opt.MaxNodes
 	packages map[string]*Package // the packages nested instances use, by digest
 }
 
@@ -221,7 +225,8 @@ type frame struct {
 	prefix    string            // a node named x is emitted as prefix.x
 	chain     []string          // Source.Instances
 	blueprint string            // Source.Blueprint
-	item      *Item             // Source.Item
+	item      *Item             // the item errors name: this blueprint's tag, else the one it was made for
+	source    *Item             // Source.Item: the item of the instance in the graph
 	depth     int               // uses levels below the outer instance
 	requires  map[string]string // the classes this blueprint may emit
 }
@@ -234,6 +239,27 @@ func (f *frame) errorf(setting, format string, args ...any) *Error {
 		Item:      f.item.clone(),
 		Msg:       fmt.Sprintf(format, args...),
 	}
+}
+
+// tag makes f's nodes for item it. Errors name it whatever the depth; the
+// source map names it only in the instance in the graph, whose settings
+// Source.Item refers to.
+func (f *frame) tag(it *Item) {
+	f.item = it
+	if f.depth == 0 {
+		f.source = it
+	}
+}
+
+// take counts one more node or nested instance against opt.MaxNodes. An
+// instance counts even when it makes no node, so instances that fan out to
+// nothing cannot run without bound.
+func (f *frame) take() error {
+	if f.b.nodes >= f.b.opt.MaxNodes {
+		return f.errorf("", "compile makes more than %d nodes", f.b.opt.MaxNodes)
+	}
+	f.b.nodes++
+	return nil
 }
 
 func (it *Item) clone() *Item {
@@ -258,12 +284,11 @@ func (f *frame) emit(name string, n *graph.Node) (id string, err error) {
 	if _, ok := f.b.out[id]; ok {
 		return "", f.errorf("", "duplicate node id %s", id)
 	}
-	if f.b.nodes >= f.b.opt.MaxNodes {
-		return "", f.errorf("", "compile makes more than %d nodes", f.b.opt.MaxNodes)
+	if err := f.take(); err != nil {
+		return "", err
 	}
-	f.b.nodes++
 	f.b.out[id] = n
-	f.b.sources[id] = Source{Instances: slices.Clone(f.chain), Blueprint: f.blueprint, Item: f.item.clone()}
+	f.b.sources[id] = Source{Instances: slices.Clone(f.chain), Blueprint: f.blueprint, Item: f.source.clone()}
 	return id, nil
 }
 
@@ -283,8 +308,9 @@ func isInstance(n *graph.Node) bool { return n != nil && strings.HasPrefix(n.Cla
 // nest expands an instance of the blueprint id that uses pins, named name in
 // f: a node group's node id, or a program's ctx.use name. Its nodes go out
 // under f.prefix + "." + name, its sources and errors carry f's chain with
-// name added, and it is one level deeper than f. It is made for f's item
-// unless it tags its own. version, when not "", is the version the
+// name added, and it is one level deeper than f. It counts against
+// opt.MaxNodes like a node. Its nodes' Source.Item is f's; its errors name
+// f's item unless it tags its own. version, when not "", is the version the
 // instance's class names. fill gives what feeds the instance's inputs once
 // its manifest is known; nest checks that against the manifest as it checks
 // an instance in the graph. nest returns the instance's manifest and the
@@ -304,10 +330,14 @@ func (f *frame) nest(uses map[string]Use, id, version, name string,
 		chain:     append(slices.Clone(f.chain), name),
 		blueprint: id + "@" + use.Version,
 		item:      f.item,
+		source:    f.source,
 		depth:     f.depth + 1,
 	}
 	if limit := f.b.opt.MaxDepth; nf.depth > limit {
 		return nil, nil, nf.errorf("", "nested deeper than %d", limit)
+	}
+	if err := nf.take(); err != nil {
+		return nil, nil, err
 	}
 	pkg, ok := f.b.packages[use.Digest]
 	if !ok {

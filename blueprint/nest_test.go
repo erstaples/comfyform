@@ -73,7 +73,9 @@ func checkSources(t *testing.T, r *Result, want Source, ids ...string) {
 	t.Helper()
 	for _, id := range ids {
 		if got := r.Sources[id]; !reflect.DeepEqual(got, want) {
-			t.Errorf("Sources[%s] = %+v, want %+v", id, got, want)
+			g, _ := json.Marshal(got)
+			w, _ := json.Marshal(want)
+			t.Errorf("Sources[%s] = %s, want %s", id, g, w)
 		}
 	}
 }
@@ -409,6 +411,24 @@ func TestUseErrors(t *testing.T) {
 	}
 }
 
+// TestUseLinkedSettingAsPort: a linked setting's reference passes into
+// ctx.node, or into a linkable setting of a nested instance, and nothing
+// else, so not into a nested instance's port.
+func TestUseLinkedSettingAsPort(t *testing.T) {
+	optional := []Port{{Name: "samples", Type: "LATENT", Optional: true}}
+	passes := simpleProgram(t, "test/passes", optional, latentPort, nil, nil, prog(`return {"latent": inputs.samples}`))
+	seed := Setting{Name: "seed", Kind: KindSeed, Default: 0.0}
+	p := userPkg(t, prog(`o = ctx.use("test/passes", "o", inputs = {"samples": settings.seed})`, `return {"latent": o.latent}`),
+		[]Setting{seed}, passes)
+	g := nestedGraph(t, p, map[string]any{"seed": lk("30", 0)})
+	g["30"] = seedNode()
+	e := compileError(t, g, p, passes)
+	if e.Msg != "main.star:2: setting seed is linked; this blueprint needs a value" || e.Setting != "seed" ||
+		!reflect.DeepEqual(e.Instances, []string{"14"}) {
+		t.Fatalf("got %+v", e)
+	}
+}
+
 func TestUseOutputs(t *testing.T) {
 	hires := loadHires(t)
 	optional := []Port{{Name: "samples", Type: "LATENT", Optional: true}}
@@ -629,7 +649,7 @@ func TestItemInherited(t *testing.T) {
 		checkLinks(t, r, []wantLink{{"18", "samples", ref{"17", 0}}})
 	})
 
-	t.Run("a program's child, unless the nested blueprint tags its own", func(t *testing.T) {
+	t.Run("a program's child, whatever the nested blueprint tags", func(t *testing.T) {
 		rg := loadRefGroup(t)
 		denoises := Setting{Name: "denoises", Kind: KindFloat, List: &ListBounds{Max: 4}}
 		p := userPkg(t, prog(
@@ -645,7 +665,9 @@ func TestItemInherited(t *testing.T) {
 		for k := range 2 {
 			want := Source{Instances: []string{"14", "h"}, Blueprint: "test/hires@1.0.0", Item: &Item{Setting: "denoises", Index: k}}
 			checkSources(t, r, want, fmt.Sprintf("14.p%d.h.1", k), fmt.Sprintf("14.p%d.h.2", k))
-			want = Source{Instances: []string{"14", "refs"}, Blueprint: "test/ref-group@1.0.0", Item: &Item{Setting: "images", Index: k}}
+			// ref-group's copies are its images, but Source.Item names a
+			// setting of the instance in the graph: the child's item.
+			want = Source{Instances: []string{"14", "refs"}, Blueprint: "test/ref-group@1.0.0", Item: &Item{Setting: "denoises", Index: 0}}
 			checkSources(t, r, want, fmt.Sprintf("14.tagged.refs.r%d.1", k), fmt.Sprintf("14.tagged.refs.r%d.4", k))
 		}
 		checkLinks(t, r, []wantLink{
@@ -655,6 +677,85 @@ func TestItemInherited(t *testing.T) {
 			{"14.tagged.refs.r0.3", "vae", ref{"4", 2}},
 		})
 		checkValues(t, r, []wantValue{{"14.p1.h.2", "denoise", 0.5}, {"14.tagged.refs.r1.1", "image", "b.png"}})
+
+		// Untagged at the top, a nested blueprint's copies have no item.
+		p = userPkg(t, prog(`ctx.use("test/ref-group", "refs",`,
+			`    inputs = {"conditioning": inputs.positive, "vae": inputs.vae}, settings = {"images": ["a.png"]})`,
+			`return {"latent": inputs.samples}`), nil, rg)
+		r = mustCompile(t, nestedGraph(t, p, nil), p, rg)
+		checkSources(t, r, Source{Instances: []string{"14", "refs"}, Blueprint: "test/ref-group@1.0.0"}, "14.refs.r0.1", "14.refs.r0.4")
+	})
+
+	t.Run("a repeat copy holding a program that tags its own", func(t *testing.T) {
+		names := Setting{Name: "names", Kind: KindString, List: &ListBounds{Max: 4}}
+		scale := Setting{Name: "scale", Kind: KindFloat, Default: 1.5}
+		tagger := simpleProgram(t, "test/tagger", latentPort, latentPort, []Setting{names, scale}, []string{"LatentUpscaleBy"}, prog(
+			`lat = inputs.latent`,
+			`for i, n in enumerate(settings.names):`,
+			`    c = ctx.child("t%d" % i, item = ("names", i))`,
+			`    lat = c.node("up", "LatentUpscaleBy", samples = lat, upscale_method = "nearest-exact", scale_by = settings.scale).LATENT`,
+			`return {"latent": lat}`))
+		each := eachTagger(t, tagger)
+		if ps := each.Check(fixtureClasses(t)); len(ps) != 0 {
+			t.Fatalf("problems:\n%v", ps)
+		}
+		r := mustCompile(t, nestedGraph(t, each, map[string]any{"scales": []any{2.0, 3.0}}), each, tagger)
+		var ids []string
+		for k := range 2 {
+			want := Source{Instances: []string{"14", "5"}, Blueprint: "test/tagger@1.0.0", Item: &Item{Setting: "scales", Index: k}}
+			for j := range 2 {
+				id := fmt.Sprintf("14.r%d.5.t%d.up", k, j)
+				ids = append(ids, id)
+				checkSources(t, r, want, id)
+			}
+		}
+		checkIDs(t, r, append(ids, hiresOuterIDs...))
+		checkLinks(t, r, []wantLink{
+			{"14.r0.5.t0.up", "samples", ref{"17", 0}},
+			{"14.r0.5.t1.up", "samples", ref{"14.r0.5.t0.up", 0}},
+			{"14.r1.5.t0.up", "samples", ref{"14.r0.5.t1.up", 0}}, // the carry
+			{"18", "samples", ref{"14.r1.5.t1.up", 0}},
+		})
+		checkValues(t, r, []wantValue{{"14.r1.5.t0.up", "scale_by", 3.0}})
+
+		// An error keeps the item of the blueprint that raised it.
+		bad := simpleProgram(t, "test/tagger", latentPort, latentPort, []Setting{names, scale}, []string{"LatentUpscaleBy"}, prog(
+			`ctx.child("t", item = ("names", 1)).node("up", "Foo")`,
+			`return {"latent": inputs.latent}`))
+		each = eachTagger(t, bad)
+		e := compileError(t, nestedGraph(t, each, map[string]any{"scales": []any{2.0}}), each, bad)
+		wantMsg(t, e, "class Foo is not on this server")
+		if !reflect.DeepEqual(e.Item, &Item{Setting: "names", Index: 1}) || e.Blueprint != "test/tagger@1.0.0" ||
+			!reflect.DeepEqual(e.Instances, []string{"14", "5"}) {
+			t.Fatalf("got %+v (item %+v)", e, e.Item)
+		}
+	})
+}
+
+// eachTagger is a node group test/each-tagger that repeats an instance of
+// tagger, node 5, once per element of scales, each copy taking the latent of
+// the copy before, and holding names a and b.
+func eachTagger(t *testing.T, tagger *Package) *Package {
+	t.Helper()
+	manifest := fmt.Sprintf(`{
+  "format": 1, "id": "test/each-tagger", "version": "1.0.0", "title": "Tag each",
+  "inputs": [{ "name": "latent", "type": "LATENT", "to": [{ "nodeId": "5", "input": "latent" }] }],
+  "outputs": [{ "name": "latent", "type": "LATENT", "from": { "nodeId": "5", "output": 0 } }],
+  "settings": [{ "name": "scales", "kind": "float", "min": 1, "max": 4, "list": { "min": 0, "max": 4 },
+                 "to": [{ "nodeId": "5", "input": "scale" }] }],
+  "repeats": [{ "nodes": ["5"], "over": ["scales"],
+                "carry": [{ "to": { "nodeId": "5", "input": "latent" }, "from": { "nodeId": "5", "output": 0 } }] }],
+  "requires": { "classes": {} },
+  "uses": { "test/tagger": { "version": "1.0.0", "digest": %q } }
+}`, tagger.Digest)
+	group := fmt.Sprintf(`{
+  "5": { "class_type": "bp:test/tagger@1.0.0",
+         "inputs": { "latent": ["in", 0], "names": ["a", "b"], "scale": 1.5 },
+         "_meta": { "blueprint": %q } }
+}`, tagger.Digest)
+	return mustLoad(t, fstest.MapFS{
+		"blueprint.json": {Data: []byte(manifest)},
+		"graph.json":     {Data: []byte(group)},
 	})
 }
 
@@ -665,20 +766,79 @@ func TestNodeLimit(t *testing.T) {
 	_, err := Compile(refGraph(t, rg, "a.png", "b.png", "c.png"), opt)
 	wantMsg(t, asError(t, err), "compile makes more than 10 nodes")
 
-	// Nested nodes count against the limit too.
+	// Nested nodes count against the limit too, and so does the nested
+	// instance itself: nested-group makes one instance and two nodes.
 	ng, hires := loadNestedGroup(t), loadHires(t)
 	opt = options(t, ng, hires)
-	opt.MaxNodes = 2
+	opt.MaxNodes = 3
 	if _, err := Compile(nestedGraph(t, ng, nil), opt); err != nil {
-		t.Fatalf("2 nested nodes, MaxNodes 2: %v", err)
+		t.Fatalf("1 instance and 2 nodes, MaxNodes 3: %v", err)
 	}
-	opt.MaxNodes = 1
+	opt.MaxNodes = 2
 	_, err = Compile(nestedGraph(t, ng, nil), opt)
 	e := asError(t, err)
-	wantMsg(t, e, "compile makes more than 1 nodes")
+	wantMsg(t, e, "compile makes more than 2 nodes")
 	if !reflect.DeepEqual(e.Instances, []string{"14", "5"}) {
 		t.Fatalf("Instances = %v", e.Instances)
 	}
+}
+
+// fanOut is levels node groups test/fan1 to test/fan<levels>, top first, and
+// below them a program test/pass that gives its latent straight back. Each
+// group holds k instances of the level below, nodes "1" to "k", all fed the
+// group's latent, and its output is node 1's. Nothing emits a node.
+func fanOut(t *testing.T, levels, k int) []*Package {
+	t.Helper()
+	below := simpleProgram(t, "test/pass", latentPort, latentPort, nil, nil, prog(`return {"latent": inputs.latent}`))
+	pkgs := []*Package{below}
+	for l := levels; l >= 1; l-- {
+		var targets, nodes []string
+		for i := 1; i <= k; i++ {
+			targets = append(targets, fmt.Sprintf(`{ "nodeId": "%d", "input": "latent" }`, i))
+			nodes = append(nodes, fmt.Sprintf(`"%d": { "class_type": %q, "inputs": { "latent": ["in", 0] }, "_meta": { "blueprint": %q } }`,
+				i, below.Manifest.Class(), below.Digest))
+		}
+		manifest := fmt.Sprintf(`{
+  "format": 1, "id": "test/fan%d", "version": "1.0.0", "title": "Fan out",
+  "inputs": [{ "name": "latent", "type": "LATENT", "to": [%s] }],
+  "outputs": [{ "name": "latent", "type": "LATENT", "from": { "nodeId": "1", "output": 0 } }],
+  "settings": [],
+  "requires": { "classes": {} },
+  "uses": { %q: { "version": "1.0.0", "digest": %q } }
+}`, l, strings.Join(targets, ", "), below.Manifest.ID, below.Digest)
+		below = mustLoad(t, fstest.MapFS{
+			"blueprint.json": {Data: []byte(manifest)},
+			"graph.json":     {Data: []byte("{" + strings.Join(nodes, ",\n") + "}")},
+		})
+		pkgs = append([]*Package{below}, pkgs...)
+	}
+	return pkgs
+}
+
+// TestNodeLimitCountsNestedInstances: an instance that makes no node still
+// counts, so instances that fan out to nothing cannot run without bound.
+func TestNodeLimitCountsNestedInstances(t *testing.T) {
+	// fan1 holds 3 fan2, each holding 3 pass: 12 nested instances.
+	pkgs := fanOut(t, 2, 3)
+	opt := options(t, pkgs...)
+	opt.MaxNodes = 12
+	r, err := Compile(nestedGraph(t, pkgs[0], nil), opt)
+	if err != nil {
+		t.Fatalf("12 instances, MaxNodes 12: %v", err)
+	}
+	checkIDs(t, r, hiresOuterIDs)
+	checkLinks(t, r, []wantLink{{"18", "samples", ref{"17", 0}}})
+	if len(r.Sources) != 0 {
+		t.Fatalf("Sources = %v", r.Sources)
+	}
+	opt.MaxNodes = 11
+	_, err = Compile(nestedGraph(t, pkgs[0], nil), opt)
+	wantMsg(t, asError(t, err), "compile makes more than 11 nodes")
+
+	// The reviewer's shape, 10 to a level, stops at the default limit.
+	pkgs = fanOut(t, 4, 10)
+	_, err = Compile(nestedGraph(t, pkgs[0], nil), options(t, pkgs...))
+	wantMsg(t, asError(t, err), "compile makes more than 2000 nodes")
 }
 
 // concurrentGraph is refGraph with a ref-group instance "14" feeding a

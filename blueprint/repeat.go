@@ -419,7 +419,7 @@ func (u *unrolled) copyOf(i, k int) (*frame, map[string]any) {
 	r := u.pkg.Manifest.Repeats[i]
 	cf := *u.f
 	cf.prefix = fmt.Sprintf("%s.r%d", u.f.prefix, k)
-	cf.item = r.item(k)
+	cf.tag(r.item(k))
 	values := maps.Clone(u.settings)
 	for _, name := range r.Over {
 		values[name] = u.settings[name].([]any)[k]

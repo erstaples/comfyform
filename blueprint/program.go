@@ -367,7 +367,7 @@ func (c *hostCtx) child(_ *starlark.Thread, b *starlark.Builtin, args starlark.T
 		if err != nil {
 			return nil, err
 		}
-		cf.item = it
+		cf.tag(it)
 	}
 	return &hostCtx{h: c.h, f: &cf}, nil
 }
@@ -450,7 +450,12 @@ func useFeed(nf *frame, m *Manifest, inputs, settings []named) (feed, error) {
 		case starlark.NoneType:
 			// nothing behind it
 		case *socket:
-			if want := m.Inputs[i].Type; v.typ != "" && !typesMatch(v.typ, want) {
+			if v.setting != "" {
+				// A linked setting passes into ctx.node, or into a linkable
+				// setting below, and nothing else.
+				return feed{}, v.misuse()
+			}
+			if want := m.Inputs[i].Type; !typesMatch(v.typ, want) {
 				return feed{}, nf.errorf("", "input %s takes %s, got %s", in.name, want, v.typ)
 			}
 			values[in.name] = v.r
