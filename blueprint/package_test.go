@@ -444,12 +444,16 @@ func TestFormProblems(t *testing.T) {
 		{"both forms", func(p *Package) { p.Files["main.star"] = []byte("x") }, "package", "exactly one of main.star and graph.json"},
 		{"neither form", func(p *Package) { delete(p.Files, "graph.json") }, "package", "exactly one of main.star and graph.json"},
 
-		{"input target node missing", func(p *Package) { p.Manifest.Inputs[0].To[0].NodeID = "9" },
-			`inputs "conditioning"`, `node "9" is not in graph.json`},
+		// The vae port: moving the conditioning port's target would also leave
+		// the repeat's carried input unlinked.
+		{"input target node missing", func(p *Package) { p.Manifest.Inputs[1].To[0].NodeID = "9" },
+			`inputs "vae"`, `node "9" is not in graph.json`},
 		{"second input target node missing", func(p *Package) {
 			p.Manifest.Inputs[0].To = append(p.Manifest.Inputs[0].To, Target{NodeID: "9", Input: "x"})
 		}, `inputs "conditioning"`, `node "9" is not in graph.json`},
-		{"input target input is not looked up", func(p *Package) { p.Manifest.Inputs[0].To[0].Input = "optional_extra" }, "", ""},
+		{"input target input is not looked up", func(p *Package) { p.Manifest.Inputs[1].To[0].Input = "optional_extra" }, "", ""},
+		{"carried input left without its port", func(p *Package) { p.Manifest.Inputs[0].To[0].Input = "optional_extra" },
+			"repeats[0]", "carry input 4.conditioning is not linked"},
 		{"input without targets", func(p *Package) { p.Manifest.Inputs[1].To = nil }, `inputs "vae"`, "input port vae has no targets"},
 		{"input with an empty target list", func(p *Package) { p.Manifest.Inputs[1].To = []Target{} }, `inputs "vae"`, "input port vae has no targets"},
 
@@ -464,7 +468,11 @@ func TestFormProblems(t *testing.T) {
 		{"list setting without repeats", func(p *Package) { p.Manifest.Repeats = nil },
 			`settings "images"`, "a list setting needs repeats"},
 
-		{"result names a node", func(p *Package) { p.Manifest.Result = "4" }, "", ""},
+		{"result names a node", func(p *Package) {
+			p.Group["5"] = &graph.Node{Class: "LoadImage", Inputs: map[string]any{"image": ""}}
+			p.Manifest.Result = "5"
+		}, "", ""},
+		{"result names a repeated node", func(p *Package) { p.Manifest.Result = "4" }, "repeats[0]", "result is inside a repeat"},
 		{"result names a missing node", func(p *Package) { p.Manifest.Result = "9" }, "result", `result "9" is not in graph.json`},
 
 		{"class not in requires", func(p *Package) { delete(p.Manifest.Requires.Classes, "VAEEncode") },
@@ -565,6 +573,7 @@ func TestCheckTreatsANullNodeAsMissing(t *testing.T) {
 		`settings "megapixels": node "2" is not in graph.json`,
 		`settings "upscale_method": node "2" is not in graph.json`,
 		`graph.json node "2": node is null`,
+		`repeats[0]: node "2" is not in graph.json`,
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("problems:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))

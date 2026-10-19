@@ -182,10 +182,11 @@ const inLinkID = "in"
 // Check returns every problem the package has that needs more than the
 // manifest: how it uses its form, and whether the manifest and the files
 // agree. The problems come in the order the manifest declares what they are
-// about (inputs, outputs, settings, result), then the nodes of graph.json.
+// about (inputs, outputs, settings, result), then the nodes of graph.json,
+// then the repeats.
 //
-// classes is the server's node classes, for checks against them; with nil
-// Check reads the package alone.
+// classes is the server's node classes, for checks against them (the types
+// a repeat's carries join); with nil Check reads the package alone.
 func (p *Package) Check(classes Classes) Problems {
 	var ps Problems
 	_, hasStar := p.Files[programFile]
@@ -198,6 +199,7 @@ func (p *Package) Check(classes Classes) Problems {
 		p.checkProgram(&ps)
 	} else {
 		p.checkGroup(&ps)
+		ps = append(ps, checkRepeats(p.Manifest, p.Group, classes)...)
 	}
 	return ps
 }

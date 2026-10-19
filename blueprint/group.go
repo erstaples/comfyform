@@ -36,19 +36,36 @@ func groupBindings(m *Manifest) map[string][]binding {
 // expandGroup copies each node of a node group under the frame's prefix:
 // links between the group's nodes point at their copies, port targets take
 // the port's socket (an optional port with nothing behind it drops the
-// input), and setting targets take the setting's value.
+// input), and setting targets take the setting's value. Each repeat is
+// unrolled into its copies, and an output port takes what its socket
+// resolves to, which for a carried output is the last copy's.
 func (f *frame) expandGroup(pkg *Package, inputs map[string]*ref, settings map[string]any) (map[string]*ref, error) {
-	bindings := groupBindings(pkg.Manifest)
-	copied := func(node string, out int) *ref { return &ref{node: f.prefix + "." + node, out: out} }
-	for _, id := range pkg.Group.IDs() {
-		n := pkg.Group[id]
-		switch {
+	ids := pkg.Group.IDs()
+	for _, id := range ids {
+		switch n := pkg.Group[id]; {
 		case n == nil:
 			return nil, f.errorf("", "%s node %s is null", groupFile, id)
 		case strings.HasPrefix(n.Class, classPrefix):
 			return nil, f.errorf("", "node %s is a blueprint instance; nested blueprints come later", id)
 		}
-		in, err := f.groupInputs(pkg.Group, id, bindings[id], copied, inputs, settings)
+	}
+	u, err := f.unroll(pkg, inputs, settings)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		i, repeated := u.owner[id]
+		if repeated {
+			// A repeat's copies go out together, where its first node is.
+			if u.nodes[i][0] == id {
+				if err := u.emitCopies(i, settings); err != nil {
+					return nil, err
+				}
+			}
+			continue
+		}
+		n := pkg.Group[id]
+		in, err := f.groupInputs(pkg.Group, id, u.bindings[id], u.linkTo(-1, 0), inputs, settings)
 		if err != nil {
 			return nil, err
 		}
@@ -62,15 +79,19 @@ func (f *frame) expandGroup(pkg *Package, inputs map[string]*ref, settings map[s
 		if o.From == nil || pkg.Group[o.From.NodeID] == nil {
 			return nil, f.errorf("", "output %s comes from no node of %s", o.Name, groupFile)
 		}
-		outs[o.Name] = copied(o.From.NodeID, o.From.Output)
+		r, err := u.resolve(o.From.NodeID, o.From.Output, nil)
+		if err != nil {
+			return nil, err
+		}
+		outs[o.Name] = r
 	}
 	return outs, nil
 }
 
 // groupInputs builds the inputs of the copy of group node id. linkTo gives
-// the compiled socket for a link to another node of the group; nil drops the
-// input.
-func (f *frame) groupInputs(group graph.Prompt, id string, bound []binding, linkTo func(node string, out int) *ref,
+// the compiled socket for a link to another node of the group; a link with
+// nothing behind it is an error.
+func (f *frame) groupInputs(group graph.Prompt, id string, bound []binding, linkTo func(node string, out int) (*ref, error),
 	inputs map[string]*ref, settings map[string]any) (map[string]any, error) {
 	n := group[id]
 	in := make(map[string]any, len(n.Inputs))
@@ -86,9 +107,12 @@ func (f *frame) groupInputs(group graph.Prompt, id string, bound []binding, link
 			case group[node] == nil:
 				return nil, f.errorf("", "node %s input %s links node %s, which is not in %s", id, k, node, groupFile)
 			}
-			r := linkTo(node, out)
-			if r == nil {
-				continue
+			r, err := linkTo(node, out)
+			switch {
+			case err != nil:
+				return nil, err
+			case r == nil:
+				return nil, f.errorf("", "node %s input %s links output %d of node %s, which has nothing behind it", id, k, out, node)
 			}
 			v = r.link()
 		}

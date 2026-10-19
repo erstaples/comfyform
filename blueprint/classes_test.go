@@ -65,7 +65,7 @@ func TestSchemaClasses(t *testing.T) {
 // captured classes: each hash is schema.Class.Hash on testdata/object_info.json.
 func TestFixtureClassHashes(t *testing.T) {
 	s := fixtureSchema(t)
-	for _, dir := range []string{hiresDir, refGroupDir} {
+	for _, dir := range []string{hiresDir, refGroupDir, refinePassesDir} {
 		m := mustLoad(t, os.DirFS(dir)).Manifest
 		for _, class := range slices.Sorted(maps.Keys(m.Requires.Classes)) {
 			c := s.Classes[class]

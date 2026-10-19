@@ -1,0 +1,38 @@
+{
+  "format": 1,
+  "id": "test/refine-passes",
+  "version": "1.0.0",
+  "title": "Refine passes",
+  "description": "Upscales a latent and refines it once per pass, each pass working on the one before.",
+  "inputs": [
+    { "name": "model", "type": "MODEL", "to": [{ "nodeId": "2", "input": "model" }] },
+    { "name": "positive", "type": "CONDITIONING", "to": [{ "nodeId": "2", "input": "positive" }] },
+    { "name": "negative", "type": "CONDITIONING", "to": [{ "nodeId": "2", "input": "negative" }] },
+    { "name": "samples", "type": "LATENT", "to": [{ "nodeId": "1", "input": "samples" }] }
+  ],
+  "outputs": [
+    { "name": "latent", "type": "LATENT", "from": { "nodeId": "2", "output": 0 } }
+  ],
+  "settings": [
+    { "name": "passes", "kind": "int", "default": 2, "min": 0, "max": 4 },
+    { "name": "scale_by", "kind": "float", "default": 1.5, "min": 1, "max": 4,
+      "to": [{ "nodeId": "1", "input": "scale_by" }] },
+    { "name": "denoise", "kind": "float", "default": 0.45, "min": 0, "max": 1,
+      "to": [{ "nodeId": "2", "input": "denoise" }] }
+  ],
+  "repeats": [{
+    "nodes": ["1", "2"],
+    "count": "passes",
+    "carry": [{ "to": { "nodeId": "1", "input": "samples" },
+                "from": { "nodeId": "2", "output": 0 } }]
+  }],
+  "requires": {
+    "classes": {
+      "LatentUpscaleBy": "sha256:a149764f119e4f3dee5003e1",
+      "KSampler": "sha256:9bb8dab51fdefa092f7d92e5"
+    },
+    "packs": {},
+    "models": {}
+  },
+  "uses": {}
+}
