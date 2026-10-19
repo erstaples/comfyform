@@ -54,7 +54,8 @@ type Node struct {
 }
 
 type Meta struct {
-	Title string `json:"title,omitempty"`
+	Title     string `json:"title,omitempty"`
+	Blueprint string `json:"blueprint,omitempty"`
 }
 
 // Prompt is ComfyUI's API format: node id -> node.
