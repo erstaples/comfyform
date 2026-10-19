@@ -5,6 +5,7 @@ import (
 	"maps"
 	"math"
 	"slices"
+	"strings"
 
 	"github.com/erstaples/comfyform/graph"
 )
@@ -307,10 +308,21 @@ type unrolled struct {
 	f        *frame
 	pkg      *Package
 	inputs   map[string]*ref
+	settings map[string]any
 	bindings map[string][]binding
 	owner    map[string]int // repeated node -> its repeat
 	nodes    [][]string     // each repeat's nodes, in natural order
 	copies   []int          // each repeat's number of copies
+
+	nest map[string]*nestedNode // the group's instance nodes, by compiled prefix
+	path []string               // the instance nodes being expanded, outermost first
+}
+
+// nestedNode is a node of the group that is a blueprint instance, in one
+// copy: its manifest and the socket behind each output port, once expanded.
+type nestedNode struct {
+	m    *Manifest // nil while it is being expanded
+	outs map[string]*ref
 }
 
 // unroll works out the copies of each repeat of pkg for the instance's
@@ -318,10 +330,11 @@ type unrolled struct {
 func (f *frame) unroll(pkg *Package, inputs map[string]*ref, settings map[string]any) (*unrolled, error) {
 	m := pkg.Manifest
 	u := &unrolled{
-		f: f, pkg: pkg, inputs: inputs, bindings: groupBindings(m),
+		f: f, pkg: pkg, inputs: inputs, settings: settings, bindings: groupBindings(m),
 		owner:  repeatOwners(m, pkg.Group),
 		nodes:  make([][]string, len(m.Repeats)),
 		copies: make([]int, len(m.Repeats)),
+		nest:   map[string]*nestedNode{},
 	}
 	for _, id := range pkg.Group.IDs() {
 		if i, ok := u.owner[id]; ok {
@@ -383,10 +396,123 @@ func (r Repeat) item(k int) *Item {
 }
 
 // id is the compiled id of a node of the group outside any repeat, and
-// copyID that of copy k of a repeated node.
+// copyID that of copy k of a repeated node. nodeID is either: copy k of
+// repeat i, or with i = -1 a node outside every repeat.
 func (u *unrolled) id(node string) string { return u.f.prefix + "." + node }
 func (u *unrolled) copyID(k int, node string) string {
 	return fmt.Sprintf("%s.r%d.%s", u.f.prefix, k, node)
+}
+func (u *unrolled) nodeID(i, k int, node string) string {
+	if i < 0 {
+		return u.id(node)
+	}
+	return u.copyID(k, node)
+}
+
+// copyOf is the frame copy k of repeat i emits into and the settings it
+// sees, each over setting at its element k. With i = -1 they are the frame
+// and settings of the nodes outside every repeat.
+func (u *unrolled) copyOf(i, k int) (*frame, map[string]any) {
+	if i < 0 {
+		return u.f, u.settings
+	}
+	r := u.pkg.Manifest.Repeats[i]
+	cf := *u.f
+	cf.prefix = fmt.Sprintf("%s.r%d", u.f.prefix, k)
+	cf.item = r.item(k)
+	values := maps.Clone(u.settings)
+	for _, name := range r.Over {
+		values[name] = u.settings[name].([]any)[k]
+	}
+	return &cf, values
+}
+
+// at is the compiled socket behind output out of group node node in copy k
+// of repeat i (i = -1 outside every repeat): the node's copy, or for a node
+// that is a blueprint instance, what its output port resolved to.
+func (u *unrolled) at(i, k int, node string, out int) (*ref, error) {
+	if !isInstance(u.pkg.Group[node]) {
+		return &ref{node: u.nodeID(i, k, node), out: out}, nil
+	}
+	n, err := u.nested(i, k, node)
+	if err != nil {
+		return nil, err
+	}
+	outs := n.m.Outputs
+	if out < 0 || out >= len(outs) {
+		cf, _ := u.copyOf(i, k)
+		return nil, cf.errorf("", "a link takes output %d of node %s, and %s@%s has %s",
+			out, node, n.m.ID, n.m.Version, count(len(outs), "output"))
+	}
+	return n.outs[outs[out].Name], nil
+}
+
+// nested expands group node id, a blueprint instance, in copy k of repeat i
+// (i = -1 outside every repeat), the first time something needs it: a link
+// to an instance needs its outputs, so it may go out before nodes that sort
+// ahead of it. Instances that link each other in a cycle are an error.
+func (u *unrolled) nested(i, k int, id string) (*nestedNode, error) {
+	key := u.nodeID(i, k, id)
+	if n, ok := u.nest[key]; ok {
+		if n.m == nil {
+			cf, _ := u.copyOf(i, k)
+			cycle := append(slices.Clone(u.path[max(slices.Index(u.path, key), 0):]), key)
+			return nil, cf.errorf("", "instances in %s link in a cycle: %s", groupFile, strings.Join(cycle, " -> "))
+		}
+		return n, nil
+	}
+	cf, values := u.copyOf(i, k)
+	n := &nestedNode{}
+	u.nest[key] = n
+	u.path = append(u.path, key)
+	defer func() { u.path = u.path[:len(u.path)-1] }()
+
+	class := u.pkg.Group[id].Class
+	bid, version, ok := ParseClass(class)
+	if !ok {
+		return nil, cf.errorf("", "node %s: %q is not a well-formed blueprint class", id, class)
+	}
+	m, outs, err := cf.nest(u.pkg.Manifest.Uses, bid, version, id, func(*frame, *Manifest) (feed, error) {
+		return u.feed(i, k, id, cf, values)
+	})
+	if err != nil {
+		return nil, err
+	}
+	n.m, n.outs = m, outs
+	return n, nil
+}
+
+// feed is what fills the inputs of group node id, a blueprint instance, in
+// copy k of repeat i: graph.json's values and links, with the ports and
+// settings bound to it put in, and after the first copy its carried inputs
+// taken from the copy before.
+func (u *unrolled) feed(i, k int, id string, cf *frame, settings map[string]any) (feed, error) {
+	values := maps.Clone(u.pkg.Group[id].Inputs)
+	if values == nil {
+		values = map[string]any{}
+	}
+	for _, b := range u.bindings[id] {
+		if b.port != "" {
+			values[b.input] = u.inputs[b.port]
+		} else {
+			values[b.input] = settings[b.setting]
+		}
+	}
+	if k > 0 {
+		for _, c := range u.pkg.Manifest.Repeats[i].Carry {
+			if c.To.NodeID == id {
+				r, err := u.at(i, k-1, c.From.NodeID, c.From.Output)
+				if err != nil {
+					return feed{}, err
+				}
+				values[c.To.Input] = r
+			}
+		}
+	}
+	linkTo := u.linkTo(i, k)
+	return feed{values: values, resolve: func(input, node string, idx int) (*ref, error) {
+		return cf.groupRef(u.pkg.Group, id, input, node, idx, linkTo)
+	}}, nil
 }
 
 // linkTo is groupInputs' hook for a node of repeat i in copy k, or for a node
@@ -395,7 +521,7 @@ func (u *unrolled) copyID(k int, node string) string {
 func (u *unrolled) linkTo(i, k int) func(node string, out int) (*ref, error) {
 	return func(node string, out int) (*ref, error) {
 		if j, ok := u.owner[node]; ok && j == i {
-			return &ref{node: u.copyID(k, node), out: out}, nil
+			return u.at(i, k, node, out)
 		}
 		return u.resolve(node, out, nil)
 	}
@@ -409,7 +535,7 @@ func (u *unrolled) linkTo(i, k int) func(node string, out int) (*ref, error) {
 func (u *unrolled) resolve(node string, out int, seen map[[2]int]bool) (*ref, error) {
 	i, ok := u.owner[node]
 	if !ok {
-		return &ref{node: u.id(node), out: out}, nil
+		return u.at(-1, 0, node, out)
 	}
 	r := u.pkg.Manifest.Repeats[i]
 	c := slices.IndexFunc(r.Carry, func(c Carry) bool { return c.From == Socket{NodeID: node, Output: out} })
@@ -417,7 +543,7 @@ func (u *unrolled) resolve(node string, out int, seen map[[2]int]bool) (*ref, er
 	case c < 0:
 		return nil, u.f.errorf("", "output %d of node %s leaves repeats[%d], and no carry carries it", out, node, i)
 	case u.copies[i] > 0:
-		return &ref{node: u.copyID(u.copies[i]-1, node), out: out}, nil
+		return u.at(i, u.copies[i]-1, node, out)
 	case seen[[2]int{i, c}]:
 		return nil, u.f.errorf("", "with no copies, the carries of repeats[%d] pass through each other in a loop", i)
 	}
@@ -438,28 +564,38 @@ func (u *unrolled) resolve(node string, out int, seen map[[2]int]bool) (*ref, er
 
 // emitCopies emits the copies of repeat i in order, each node of a copy with
 // its over settings at the copy's element and its carried inputs, after the
-// first copy, linked to the copy before.
-func (u *unrolled) emitCopies(i int, settings map[string]any) error {
+// first copy, linked to the copy before. A node that is a blueprint instance
+// is expanded once per copy, under the copy's prefix.
+func (u *unrolled) emitCopies(i int) error {
 	r := u.pkg.Manifest.Repeats[i]
 	for k := range u.copies[i] {
-		cf := *u.f
-		cf.prefix = fmt.Sprintf("%s.r%d", u.f.prefix, k)
-		cf.item = r.item(k)
-		values := maps.Clone(settings)
-		for _, name := range r.Over {
-			values[name] = settings[name].([]any)[k]
-		}
+		cf, values := u.copyOf(i, k)
 		for _, id := range u.nodes[i] {
 			n := u.pkg.Group[id]
+			if isInstance(n) {
+				if _, err := u.nested(i, k, id); err != nil {
+					return err
+				}
+				continue
+			}
 			in, err := cf.groupInputs(u.pkg.Group, id, u.bindings[id], u.linkTo(i, k), u.inputs, values)
 			if err != nil {
 				return err
 			}
 			if k > 0 {
 				for _, c := range r.Carry {
-					if c.To.NodeID == id {
-						in[c.To.Input] = (&ref{node: u.copyID(k-1, c.From.NodeID), out: c.From.Output}).link()
+					if c.To.NodeID != id {
+						continue
 					}
+					from, err := u.at(i, k-1, c.From.NodeID, c.From.Output)
+					if err != nil {
+						return err
+					}
+					if from == nil {
+						return cf.errorf("", "carry input %s.%s takes output %d of node %s from the copy before, which has nothing behind it",
+							id, c.To.Input, c.From.Output, c.From.NodeID)
+					}
+					in[c.To.Input] = from.link()
 				}
 			}
 			if _, err := cf.emit(id, &graph.Node{Class: n.Class, Inputs: in, Meta: n.Meta}); err != nil {

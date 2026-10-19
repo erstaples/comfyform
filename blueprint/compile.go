@@ -14,7 +14,8 @@ import (
 )
 
 // Resolver finds the package a digest names. Compile asks it once for each
-// instance in the graph.
+// instance in the graph, and once per compile for each digest that a nested
+// instance's uses pins.
 type Resolver interface {
 	Package(digest string) (*Package, error)
 }
@@ -135,7 +136,7 @@ func Compile(p graph.Prompt, opt Options) (*Result, error) {
 	ids := p.IDs()
 	var instIDs []string
 	for _, id := range ids {
-		if n := p[id]; n != nil && strings.HasPrefix(n.Class, classPrefix) {
+		if isInstance(p[id]) {
 			instIDs = append(instIDs, id)
 		}
 	}
@@ -159,7 +160,7 @@ func Compile(p graph.Prompt, opt Options) (*Result, error) {
 		return nil, err
 	}
 
-	b := &build{opt: opt.withDefaults(), outer: p, out: graph.Prompt{}, sources: map[string]Source{}}
+	b := &build{opt: opt.withDefaults(), outer: p, out: graph.Prompt{}, sources: map[string]Source{}, packages: map[string]*Package{}}
 	for _, in := range order {
 		if err := b.instance(in, insts); err != nil {
 			return nil, err
@@ -205,11 +206,12 @@ func (r *ref) link() graph.AnyRef { return graph.Link(r.node, r.out) }
 
 // build is the output of one Compile call as it grows.
 type build struct {
-	opt     Options      // with the defaults filled in
-	outer   graph.Prompt // the graph being compiled; read only
-	out     graph.Prompt // the compiled graph
-	sources map[string]Source
-	nodes   int // nodes emitted, counted against opt.MaxNodes
+	opt      Options      // with the defaults filled in
+	outer    graph.Prompt // the graph being compiled; read only
+	out      graph.Prompt // the compiled graph
+	sources  map[string]Source
+	nodes    int                 // nodes emitted, counted against opt.MaxNodes
+	packages map[string]*Package // the packages nested instances use, by digest
 }
 
 // frame is where nodes are being emitted: under which id prefix, and with
@@ -275,6 +277,70 @@ func (f *frame) expand(pkg *Package, inputs map[string]*ref, settings map[string
 	return f.expandGroup(pkg, inputs, settings)
 }
 
+// isInstance reports whether n is a blueprint instance.
+func isInstance(n *graph.Node) bool { return n != nil && strings.HasPrefix(n.Class, classPrefix) }
+
+// nest expands an instance of the blueprint id that uses pins, named name in
+// f: a node group's node id, or a program's ctx.use name. Its nodes go out
+// under f.prefix + "." + name, its sources and errors carry f's chain with
+// name added, and it is one level deeper than f. It is made for f's item
+// unless it tags its own. version, when not "", is the version the
+// instance's class names. fill gives what feeds the instance's inputs once
+// its manifest is known; nest checks that against the manifest as it checks
+// an instance in the graph. nest returns the instance's manifest and the
+// compiled socket behind each output port.
+func (f *frame) nest(uses map[string]Use, id, version, name string,
+	fill func(nf *frame, m *Manifest) (feed, error)) (*Manifest, map[string]*ref, error) {
+	use, ok := uses[id]
+	if !ok {
+		return nil, nil, f.errorf("", "%s is not in uses", id)
+	}
+	if version != "" && version != use.Version {
+		return nil, nil, f.errorf("", "node %s: uses pins %s at %s, not %s", name, id, use.Version, version)
+	}
+	nf := &frame{
+		b:         f.b,
+		prefix:    f.prefix + "." + name,
+		chain:     append(slices.Clone(f.chain), name),
+		blueprint: id + "@" + use.Version,
+		item:      f.item,
+		depth:     f.depth + 1,
+	}
+	if limit := f.b.opt.MaxDepth; nf.depth > limit {
+		return nil, nil, nf.errorf("", "nested deeper than %d", limit)
+	}
+	pkg, ok := f.b.packages[use.Digest]
+	if !ok {
+		var problem string
+		if pkg, problem = fetch(f.b.opt.Packages, use.Digest); problem != "" {
+			return nil, nil, nf.errorf("", "%s", problem)
+		}
+		f.b.packages[use.Digest] = pkg
+	}
+	m := pkg.Manifest
+	if m.ID != id || m.Version != use.Version {
+		got := m.ID + "@" + m.Version
+		if m.ID == id {
+			got = "@" + m.Version
+		}
+		return nil, nil, nf.errorf("", "uses says %s@%s, digest is %s", id, use.Version, got)
+	}
+	nf.requires = m.Requires.Classes
+	fd, err := fill(nf, m)
+	if err != nil {
+		return nil, nil, err
+	}
+	inputs, settings, err := nf.bind(m, fd)
+	if err != nil {
+		return nil, nil, err
+	}
+	outs, err := nf.expand(pkg, inputs, settings)
+	if err != nil {
+		return nil, nil, err
+	}
+	return m, outs, nil
+}
+
 // instance is a blueprint instance of the graph being compiled.
 type instance struct {
 	id   string
@@ -309,14 +375,9 @@ func resolveInstance(id string, n *graph.Node, packages Resolver) (*instance, er
 	if digest == "" {
 		return nil, fail("has no blueprint digest")
 	}
-	pkg, err := packages.Package(digest)
-	switch {
-	case err != nil:
-		return nil, fail("cannot load %s: %v", digest, err)
-	case pkg == nil || pkg.Manifest == nil:
-		return nil, fail("no package for %s", digest)
-	case pkg.Digest != digest:
-		return nil, fail("the resolver served %s when asked for %s", pkg.Digest, digest)
+	pkg, problem := fetch(packages, digest)
+	if problem != "" {
+		return nil, fail("%s", problem)
 	}
 	switch m := pkg.Manifest; {
 	case m.ID != bid:
@@ -325,6 +386,21 @@ func resolveInstance(id string, n *graph.Node, packages Resolver) (*instance, er
 		return nil, fail("digest is %s@%s, class says @%s", m.ID, m.Version, version)
 	}
 	return &instance{id: id, node: n, pkg: pkg}, nil
+}
+
+// fetch asks packages for the package of digest, and says what is wrong
+// when the answer is not that package.
+func fetch(packages Resolver, digest string) (*Package, string) {
+	pkg, err := packages.Package(digest)
+	switch {
+	case err != nil:
+		return nil, fmt.Sprintf("cannot load %s: %v", digest, err)
+	case pkg == nil || pkg.Manifest == nil:
+		return nil, "no package for " + digest
+	case pkg.Digest != digest:
+		return nil, fmt.Sprintf("the resolver served %s when asked for %s", pkg.Digest, digest)
+	}
+	return pkg, ""
 }
 
 // deps are the instances that in's ports and non-list settings link to, in
@@ -409,37 +485,16 @@ func (insts instances) resolve(consumer, input, node string, idx int) (*ref, err
 // and expands its package under the instance's id.
 func (b *build) instance(in *instance, insts instances) error {
 	m := in.pkg.Manifest
-	known := map[string]bool{}
-	for _, p := range m.Inputs {
-		known[p.Name] = true
-	}
-	for _, s := range m.Settings {
-		known[s.Name] = true
-	}
-	for _, k := range slices.Sorted(maps.Keys(in.node.Inputs)) {
-		if !known[k] {
-			return in.errorf("", "input %s is not a port or setting of the blueprint", k)
-		}
-	}
-
-	inputs := make(map[string]*ref, len(m.Inputs))
-	for _, p := range m.Inputs {
-		r, err := in.port(p, insts)
-		if err != nil {
-			return err
-		}
-		inputs[p.Name] = r
-	}
-	settings := make(map[string]any, len(m.Settings))
-	for _, s := range m.Settings {
-		v, err := in.setting(s, insts)
-		if err != nil {
-			return err
-		}
-		settings[s.Name] = v
-	}
-
 	f := &frame{b: b, prefix: in.id, chain: []string{in.id}, blueprint: in.blueprint(), requires: m.Requires.Classes}
+	inputs, settings, err := f.bind(m, feed{
+		values: in.node.Inputs,
+		resolve: func(input, node string, idx int) (*ref, error) {
+			return insts.resolve(in.id, input, node, idx)
+		},
+	})
+	if err != nil {
+		return err
+	}
 	outs, err := f.expand(in.pkg, inputs, settings)
 	if err != nil {
 		return err
@@ -448,54 +503,115 @@ func (b *build) instance(in *instance, insts instances) error {
 	return nil
 }
 
-// port is the compiled socket behind an input port of the instance, or nil
-// for an optional port with nothing behind it.
-func (in *instance) port(p Port, insts instances) (*ref, error) {
-	v, ok := in.node.Inputs[p.Name]
+// feed is what fills the inputs of an instance: a value for each input,
+// either as a graph holds it or as a *ref compile has resolved already (nil
+// for nothing behind it, which reads as an input left out), and how a link
+// in a value resolves.
+type feed struct {
+	values  map[string]any
+	resolve func(input, node string, idx int) (*ref, error)
+}
+
+// bind reads the ports and settings of an instance of m from fd, checking
+// them against m: the compiled socket behind each input port, and each
+// setting's value. Every instance does this, in the graph or nested.
+func (f *frame) bind(m *Manifest, fd feed) (map[string]*ref, map[string]any, error) {
+	known := map[string]bool{}
+	for _, p := range m.Inputs {
+		known[p.Name] = true
+	}
+	for _, s := range m.Settings {
+		known[s.Name] = true
+	}
+	for _, k := range slices.Sorted(maps.Keys(fd.values)) {
+		if !known[k] {
+			return nil, nil, f.errorf("", "input %s is not a port or setting of the blueprint", k)
+		}
+	}
+
+	inputs := make(map[string]*ref, len(m.Inputs))
+	for _, p := range m.Inputs {
+		r, err := f.port(p, fd)
+		if err != nil {
+			return nil, nil, err
+		}
+		inputs[p.Name] = r
+	}
+	settings := make(map[string]any, len(m.Settings))
+	for _, s := range m.Settings {
+		v, err := f.setting(s, fd)
+		if err != nil {
+			return nil, nil, err
+		}
+		settings[s.Name] = v
+	}
+	return inputs, settings, nil
+}
+
+// port is the compiled socket behind an input port, or nil for an optional
+// port with nothing behind it.
+func (f *frame) port(p Port, fd feed) (*ref, error) {
+	v, ok := fd.values[p.Name]
+	if r, isRef := v.(*ref); isRef {
+		if r != nil {
+			return r, nil
+		}
+		ok = false
+	}
 	if !ok {
 		if p.Optional {
 			return nil, nil
 		}
-		return nil, in.errorf("", "input %s is not connected", p.Name)
+		return nil, f.errorf("", "input %s is not connected", p.Name)
 	}
 	node, idx, isLink := graph.AsLink(v)
 	if !isLink {
-		return nil, in.errorf("", "input %s must be a link", p.Name)
+		return nil, f.errorf("", "input %s must be a link", p.Name)
 	}
-	r, err := insts.resolve(in.id, p.Name, node, idx)
+	r, err := fd.resolve(p.Name, node, idx)
 	if err != nil {
 		return nil, err
 	}
 	if r == nil && !p.Optional {
-		return nil, in.errorf("", "input %s is not connected: output %d of %s has nothing behind it", p.Name, idx, node)
+		return nil, f.errorf("", "input %s is not connected: output %d of %s has nothing behind it", p.Name, idx, node)
 	}
 	return r, nil
 }
 
-// setting is the value of a setting of the instance: what the instance holds,
-// else the manifest's default, checked against the manifest. A linked setting
-// is the *ref behind the link.
-func (in *instance) setting(s Setting, insts instances) (any, error) {
-	v, ok := in.node.Inputs[s.Name]
+// setting is the value of a setting: what the instance holds, else the
+// manifest's default, checked against the manifest. A linked setting is the
+// *ref behind the link.
+func (f *frame) setting(s Setting, fd feed) (any, error) {
+	v, ok := fd.values[s.Name]
+	if r, isRef := v.(*ref); isRef {
+		switch {
+		case r == nil:
+			ok = false
+		case s.List != nil || !s.IsLinkable():
+			return nil, f.errorf(s.Name, "setting %s is not linkable", s.Name)
+		default:
+			return r, nil
+		}
+	}
 	if !ok {
 		v = s.defaultValue()
 	} else if s.List == nil {
 		if node, idx, isLink := graph.AsLink(v); isLink {
 			if !s.IsLinkable() {
-				return nil, in.errorf(s.Name, "setting %s is not linkable", s.Name)
+				return nil, f.errorf(s.Name, "setting %s is not linkable", s.Name)
 			}
-			r, err := insts.resolve(in.id, s.Name, node, idx)
+			r, err := fd.resolve(s.Name, node, idx)
 			if err != nil {
 				return nil, err
 			}
 			if r == nil {
-				return nil, in.errorf(s.Name, "setting %s is linked to output %d of %s, which has nothing behind it", s.Name, idx, node)
+				return nil, f.errorf(s.Name, "setting %s is linked to output %d of %s, which has nothing behind it", s.Name, idx, node)
 			}
 			return r, nil
 		}
 	}
 	if msg := settingProblem(s, v); msg != "" {
-		return nil, in.errorf(s.Name, "%s", msg)
+		return nil, f.errorf(s.Name, "%s", msg)
 	}
 	return v, nil
 }

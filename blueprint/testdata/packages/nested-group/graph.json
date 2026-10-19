@@ -1,0 +1,7 @@
+{
+  "5": { "class_type": "bp:test/hires@1.0.0",
+         "inputs": { "model": ["in", 0], "positive": ["in", 0], "negative": ["in", 0], "samples": ["in", 0],
+                     "scale_by": 2.0, "denoise": 0.45, "steps": 14, "seed": 0 },
+         "_meta": { "title": "Hires pass",
+                    "blueprint": "sha256:54498c0e4e7d1245fb36527db1726a408e008c9ce95135ca5325838b9233d657" } }
+}

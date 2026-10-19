@@ -3,7 +3,6 @@ package blueprint
 import (
 	"maps"
 	"slices"
-	"strings"
 
 	"github.com/erstaples/comfyform/graph"
 )
@@ -36,17 +35,16 @@ func groupBindings(m *Manifest) map[string][]binding {
 // expandGroup copies each node of a node group under the frame's prefix:
 // links between the group's nodes point at their copies, port targets take
 // the port's socket (an optional port with nothing behind it drops the
-// input), and setting targets take the setting's value. Each repeat is
-// unrolled into its copies, and an output port takes what its socket
-// resolves to, which for a carried output is the last copy's.
+// input), and setting targets take the setting's value. A node that is a
+// blueprint instance is expanded under the prefix and its id, and a link to
+// it takes what its output port resolved to. Each repeat is unrolled into
+// its copies, and an output port takes what its socket resolves to, which
+// for a carried output is the last copy's.
 func (f *frame) expandGroup(pkg *Package, inputs map[string]*ref, settings map[string]any) (map[string]*ref, error) {
 	ids := pkg.Group.IDs()
 	for _, id := range ids {
-		switch n := pkg.Group[id]; {
-		case n == nil:
+		if pkg.Group[id] == nil {
 			return nil, f.errorf("", "%s node %s is null", groupFile, id)
-		case strings.HasPrefix(n.Class, classPrefix):
-			return nil, f.errorf("", "node %s is a blueprint instance; nested blueprints come later", id)
 		}
 	}
 	u, err := f.unroll(pkg, inputs, settings)
@@ -58,13 +56,19 @@ func (f *frame) expandGroup(pkg *Package, inputs map[string]*ref, settings map[s
 		if repeated {
 			// A repeat's copies go out together, where its first node is.
 			if u.nodes[i][0] == id {
-				if err := u.emitCopies(i, settings); err != nil {
+				if err := u.emitCopies(i); err != nil {
 					return nil, err
 				}
 			}
 			continue
 		}
 		n := pkg.Group[id]
+		if isInstance(n) {
+			if _, err := u.nested(-1, 0, id); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		in, err := f.groupInputs(pkg.Group, id, u.bindings[id], u.linkTo(-1, 0), inputs, settings)
 		if err != nil {
 			return nil, err
@@ -101,13 +105,7 @@ func (f *frame) groupInputs(group graph.Prompt, id string, bound []binding, link
 		}
 		v := n.Inputs[k]
 		if node, out, ok := graph.AsLink(v); ok {
-			switch {
-			case node == inLinkID:
-				return nil, f.errorf("", "node %s input %s links %q, and no input port feeds it", id, k, inLinkID)
-			case group[node] == nil:
-				return nil, f.errorf("", "node %s input %s links node %s, which is not in %s", id, k, node, groupFile)
-			}
-			r, err := linkTo(node, out)
+			r, err := f.groupRef(group, id, k, node, out, linkTo)
 			switch {
 			case err != nil:
 				return nil, err
@@ -138,4 +136,17 @@ func (f *frame) groupInputs(group graph.Prompt, id string, bound []binding, link
 		}
 	}
 	return in, nil
+}
+
+// groupRef is the compiled socket behind input k of group node id, which
+// links output out of node: an error unless node is a node of the group,
+// else what linkTo gives.
+func (f *frame) groupRef(group graph.Prompt, id, k, node string, out int, linkTo func(node string, out int) (*ref, error)) (*ref, error) {
+	switch {
+	case node == inLinkID:
+		return nil, f.errorf("", "node %s input %s links %q, and no input port feeds it", id, k, inLinkID)
+	case group[node] == nil:
+		return nil, f.errorf("", "node %s input %s links node %s, which is not in %s", id, k, node, groupFile)
+	}
+	return linkTo(node, out)
 }

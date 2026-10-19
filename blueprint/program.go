@@ -184,7 +184,9 @@ func typesMatch(a, b string) bool { return a == b || a == "*" || b == "*" }
 
 // programError makes an *Error of what running main.star failed with, its Msg
 // starting with the line of main.star it came from. An error the host API
-// raised keeps its setting and item.
+// raised keeps its setting and item. An error from an instance nested under
+// this one comes out as it is: its chain says where it is, and a line here
+// would read as a line of the nested blueprint.
 func (f *frame) programError(err error) *Error {
 	where, msg := programFile, err.Error()
 	var (
@@ -208,6 +210,9 @@ func (f *frame) programError(err error) *Error {
 	}
 	var hostErr *Error
 	if errors.As(err, &hostErr) {
+		if len(hostErr.Instances) > len(f.chain) {
+			return hostErr
+		}
 		e := *hostErr
 		e.Msg = where + ": " + hostErr.Msg
 		return &e
@@ -291,7 +296,7 @@ func (c *hostCtx) Type() string          { return "ctx" }
 func (c *hostCtx) Freeze()               {}
 func (c *hostCtx) Truth() starlark.Bool  { return true }
 func (c *hostCtx) Hash() (uint32, error) { return 0, errors.New("unhashable type: ctx") }
-func (c *hostCtx) AttrNames() []string   { return []string{"child", "node"} }
+func (c *hostCtx) AttrNames() []string   { return []string{"child", "node", "use"} }
 
 func (c *hostCtx) Attr(name string) (starlark.Value, error) {
 	switch name {
@@ -299,6 +304,8 @@ func (c *hostCtx) Attr(name string) (starlark.Value, error) {
 		return starlark.NewBuiltin("node", c.node), nil
 	case "child":
 		return starlark.NewBuiltin("child", c.child), nil
+	case "use":
+		return starlark.NewBuiltin("use", c.use), nil
 	}
 	return nil, nil
 }
@@ -363,6 +370,139 @@ func (c *hostCtx) child(_ *starlark.Thread, b *starlark.Builtin, args starlark.T
 		cf.item = it
 	}
 	return &hostCtx{h: c.h, f: &cf}, nil
+}
+
+// use is ctx.use(id, name, inputs = {…}, settings = {…}): an instance of the
+// blueprint id that the manifest's uses pins, its nodes emitted under
+// <prefix>.<name>. inputs maps input ports to socket references, and
+// settings maps settings to values, or to socket references for linkable
+// ones; None, or a name left out, is nothing behind a port and a setting's
+// default. It returns a struct with a socket reference for each output
+// port, or None for one with nothing behind it.
+func (c *hostCtx) use(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var id, name string
+	var inputs, settings *starlark.Dict
+	if err := starlark.UnpackArgs(b.Name(), args, kwargs, "id", &id, "name", &name, "inputs?", &inputs, "settings?", &settings); err != nil {
+		return nil, err
+	}
+	if !partName.MatchString(name) {
+		return nil, c.f.errorf("", "invalid use name %q (use letters, digits, _ and -)", name)
+	}
+	ins, err := c.names("inputs", inputs)
+	if err != nil {
+		return nil, err
+	}
+	sets, err := c.names("settings", settings)
+	if err != nil {
+		return nil, err
+	}
+	m, outs, err := c.f.nest(c.h.m.Uses, id, "", name, func(nf *frame, m *Manifest) (feed, error) {
+		return useFeed(nf, m, ins, sets)
+	})
+	if err != nil {
+		return nil, err
+	}
+	fields := make(starlark.StringDict, len(m.Outputs))
+	for _, p := range m.Outputs {
+		if r := outs[p.Name]; r != nil {
+			fields[p.Name] = &socket{f: c.f, r: r, typ: p.Type}
+		} else {
+			fields[p.Name] = starlark.None
+		}
+	}
+	return starlarkstruct.FromStringDict(starlarkstruct.Default, fields), nil
+}
+
+// named is one entry of a dict ctx.use takes.
+type named struct {
+	name string
+	v    starlark.Value
+}
+
+// names reads a dict argument of ctx.use, which may be absent, in the order
+// the program built it.
+func (c *hostCtx) names(arg string, d *starlark.Dict) ([]named, error) {
+	if d == nil {
+		return nil, nil
+	}
+	var out []named
+	for _, kv := range d.Items() {
+		name, ok := starlark.AsString(kv[0])
+		if !ok {
+			return nil, c.f.errorf("", "%s has key %s, which is not a string", arg, kv[0])
+		}
+		out = append(out, named{name, kv[1]})
+	}
+	return out, nil
+}
+
+// useFeed is what fills the inputs of the instance a ctx.use makes, read
+// against its manifest m: each port's socket reference, and each setting's
+// value as a graph holds it. Its errors are about the nested instance nf.
+func useFeed(nf *frame, m *Manifest, inputs, settings []named) (feed, error) {
+	values := map[string]any{}
+	for _, in := range inputs {
+		i := slices.IndexFunc(m.Inputs, func(p Port) bool { return p.Name == in.name })
+		if i < 0 {
+			return feed{}, nf.errorf("", "inputs has %s, which is not an input port of the blueprint", in.name)
+		}
+		switch v := in.v.(type) {
+		case starlark.NoneType:
+			// nothing behind it
+		case *socket:
+			if want := m.Inputs[i].Type; v.typ != "" && !typesMatch(v.typ, want) {
+				return feed{}, nf.errorf("", "input %s takes %s, got %s", in.name, want, v.typ)
+			}
+			values[in.name] = v.r
+		case *nodeValue:
+			return feed{}, nf.errorf("", "input %s: %s is a node, not a socket; use .OUTPUT or .out(i)", in.name, v)
+		default:
+			return feed{}, nf.errorf("", "input %s must be a socket reference, got %s", in.name, v.Type())
+		}
+	}
+	for _, s := range settings {
+		if m.settingNamed(s.name) == nil {
+			return feed{}, nf.errorf("", "settings has %s, which is not a setting of the blueprint", s.name)
+		}
+		switch v := s.v.(type) {
+		case starlark.NoneType:
+			// the default
+		case *socket:
+			values[s.name] = v.r
+		case *nodeValue:
+			return feed{}, nf.errorf(s.name, "setting %s: %s is a node, not a socket; use .OUTPUT or .out(i)", s.name, v)
+		default:
+			lit, problem := literal(v)
+			if problem != "" {
+				return feed{}, nf.errorf(s.name, "setting %s: %s", s.name, problem)
+			}
+			values[s.name] = graphValue(lit)
+		}
+	}
+	// Every socket reference is a *ref already, so a link here is a literal
+	// that only looks like one.
+	return feed{values: values, resolve: func(input, node string, idx int) (*ref, error) {
+		return nil, nf.errorf(input, "setting %s: %s reads as a link; pass a socket reference", input, show([]any{node, idx}))
+	}}, nil
+}
+
+// graphValue is a literal as a graph's JSON holds it, with every number a
+// float64, which is what an instance in the graph holds and what the
+// setting checks read.
+func graphValue(v any) any {
+	switch v := v.(type) {
+	case int64:
+		return float64(v)
+	case uint64:
+		return float64(v)
+	case []any:
+		out := make([]any, len(v))
+		for i, x := range v {
+			out[i] = graphValue(x)
+		}
+		return out
+	}
+	return v
 }
 
 // item reads ctx.child's item: a list setting of the blueprint and an index
