@@ -1,0 +1,38 @@
+{
+  "format": 1,
+  "id": "test/ref-group",
+  "version": "1.0.0",
+  "title": "Reference images",
+  "inputs": [
+    { "name": "conditioning", "type": "CONDITIONING", "to": [{ "nodeId": "4", "input": "conditioning" }] },
+    { "name": "vae", "type": "VAE", "to": [{ "nodeId": "3", "input": "vae" }] }
+  ],
+  "outputs": [
+    { "name": "conditioning", "type": "CONDITIONING", "from": { "nodeId": "4", "output": 0 } }
+  ],
+  "settings": [
+    { "name": "images", "kind": "image", "list": { "min": 0, "max": 8 },
+      "to": [{ "nodeId": "1", "input": "image" }] },
+    { "name": "megapixels", "kind": "float", "default": 1.0, "min": 0.25, "max": 4, "step": 0.05,
+      "to": [{ "nodeId": "2", "input": "megapixels" }] },
+    { "name": "upscale_method", "kind": "combo", "options": ["lanczos", "bicubic", "area"], "default": "lanczos",
+      "to": [{ "nodeId": "2", "input": "upscale_method" }] }
+  ],
+  "repeats": [{
+    "nodes": ["1", "2", "3", "4"],
+    "over": ["images"],
+    "carry": [{ "to": { "nodeId": "4", "input": "conditioning" },
+                "from": { "nodeId": "4", "output": 0 } }]
+  }],
+  "requires": {
+    "classes": {
+      "LoadImage": "sha256:000000000000000000000000",
+      "ImageScaleToTotalPixels": "sha256:000000000000000000000000",
+      "VAEEncode": "sha256:000000000000000000000000",
+      "ReferenceLatent": "sha256:000000000000000000000000"
+    },
+    "packs": {},
+    "models": {}
+  },
+  "uses": {}
+}
